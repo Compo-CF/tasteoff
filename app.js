@@ -28,6 +28,39 @@ function judgeKey(name) {
   return "j_" + String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 24);
 }
 
+// Match a name from a sheet to an existing roster judge, so imports/edits link
+// to the SAME judge (and their history) whether you typed a last name or a full
+// name. Tries: exact full-name → id/key → last-name. Returns {id,name} or null.
+function matchRosterJudge(name, roster) {
+  const s = String(name || "").trim();
+  if (!s || !roster || !roster.length) return null;
+  const low = s.toLowerCase();
+  // 1) exact full-name match (e.g. sheet "Bao Ong" == roster "Bao Ong")
+  let hit = roster.find((r) => String(r.name).trim().toLowerCase() === low);
+  if (hit) return hit;
+  // 2) key match (e.g. sheet "Ong" -> j_ong, the historical key)
+  const k = judgeKey(s);
+  hit = roster.find((r) => r.id === k);
+  if (hit) return hit;
+  // No fuzzy last-name fallback — avoids merging two different people who share
+  // a surname. An unrecognized name becomes a new judge you can merge later.
+  return null;
+}
+
+// Link a list of {name,table} judges to the roster where possible.
+function reconcileJudges(judges, roster) {
+  let matched = 0;
+  const out = (judges || []).map((j) => {
+    const m = matchRosterJudge(j.name, roster);
+    if (m) {
+      matched++;
+      return { id: m.id, name: m.name, table: j.table }; // canonical id + full name
+    }
+    return { id: judgeKey(j.name), name: j.name, table: j.table };
+  });
+  return { judges: out, matched, added: out.length - matched };
+}
+
 // ---------- tiny helpers ----------
 const $ = (sel, root = document) => root.querySelector(sel);
 const app = () => document.getElementById("app");
@@ -160,6 +193,10 @@ async function renderAdmin(preloaded) {
   c.appendChild(el(`<a class="back" href="#/">← home</a>`));
   c.appendChild(el(`<h2>Event setup</h2>`));
 
+  // Load the master roster so imported/typed judges link to existing judges.
+  let roster = [];
+  listRoster().then((r) => (roster = r));
+
   // --- your events (history / switcher) ---
   const evListSec = el(`
     <section class="panel evlist">
@@ -225,7 +262,11 @@ async function renderAdmin(preloaded) {
     </section>`);
   c.appendChild(importSec);
 
-  function applyImported(imported) {
+  async function applyImported(imported) {
+    // Link the sheet's judges to existing roster judges (keeps their history + full names).
+    const rr = roster.length ? roster : await listRoster();
+    const rec = reconcileJudges(imported.judges, rr);
+    imported.judges = rec.judges;
     const merged = { ...blankEvent(imported.id), ...imported };
     LS.setActiveEvent(merged.id);
     adminUnlocked = true;
@@ -235,7 +276,7 @@ async function renderAdmin(preloaded) {
     // Populate the form instantly from the parsed file — no Firebase round-trip.
     // The organizer reviews, then clicks "Save event" to persist.
     renderAdmin(merged);
-    toast("Loaded ✓ — review below, then Save event");
+    toast(`Loaded ✓ — ${rec.matched} judge(s) matched to roster, ${rec.added} new`);
   }
   $("#gsGo", importSec).onclick = async () => {
     const msg = $("#importMsg", importSec);
@@ -610,6 +651,9 @@ async function renderAdmin(preloaded) {
       alert("Add at least one criterion and one team first.");
       return;
     }
+    // Link judges to the roster so they keep their history and full names.
+    const rr = roster.length ? roster : await listRoster();
+    ev.judges = reconcileJudges(ev.judges, rr).judges;
     LS.setActiveEvent(ev.id);
     const btn = $("#save", c);
     btn.disabled = true;
