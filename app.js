@@ -47,18 +47,65 @@ function matchRosterJudge(name, roster) {
   return null;
 }
 
-// Link a list of {name,table} judges to the roster where possible.
+// Link a list of {name,table} judges to the roster where possible (tags matched).
 function reconcileJudges(judges, roster) {
-  let matched = 0;
   const out = (judges || []).map((j) => {
     const m = matchRosterJudge(j.name, roster);
-    if (m) {
-      matched++;
-      return { id: m.id, name: m.name, table: j.table }; // canonical id + full name
-    }
-    return { id: judgeKey(j.name), name: j.name, table: j.table };
+    if (m) return { id: m.id, name: m.name, table: j.table, matched: true };
+    return { id: judgeKey(j.name), name: j.name, table: j.table, matched: false };
   });
-  return { judges: out, matched, added: out.length - matched };
+  return { judges: out, matched: out.filter((j) => j.matched).length, added: out.filter((j) => !j.matched).length };
+}
+
+// Reconcile + ask the organizer to confirm each unmatched judge as new, or link
+// it to an existing roster judge. Returns the final judges list (matched flag stripped).
+async function linkJudges(judges, roster) {
+  const rec = reconcileJudges(judges, roster);
+  const news = rec.judges.filter((j) => !j.matched);
+  if (news.length && roster.length) {
+    const choices = await reconcileModal([...new Set(news.map((j) => j.name))], roster);
+    rec.judges.forEach((j) => {
+      if (j.matched) return;
+      const c = choices[j.name];
+      if (c && c !== "__new__") {
+        const R = roster.find((r) => r.id === c);
+        if (R) {
+          j.id = R.id;
+          j.name = R.name;
+          j.matched = true;
+        }
+      }
+    });
+  }
+  return { judges: rec.judges.map(({ matched, ...j }) => j), matched: rec.judges.filter((j) => j.matched).length, added: rec.judges.filter((j) => !j.matched).length };
+}
+
+// Modal: confirm each new judge name as new, or link to an existing roster judge.
+function reconcileModal(newNames, roster) {
+  return new Promise((resolve) => {
+    const opts = roster.map((r) => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join("");
+    const rows = newNames
+      .map(
+        (n, i) => `<div class="rec-row">
+          <span class="rec-name">${esc(n)}</span>
+          <select data-i="${i}"><option value="__new__" selected>➕ New judge</option>${opts}</select>
+        </div>`
+      )
+      .join("");
+    const ov = el(`<div class="modal-ov"><div class="modal">
+      <h3>Confirm new judges</h3>
+      <p class="sub">These names didn't match your roster. Mark each as a new judge, or link it to an existing one.</p>
+      <div class="rec-list">${rows}</div>
+      <div class="modal-actions"><button class="primary" id="recOk">Confirm</button></div>
+    </div></div>`);
+    $("#recOk", ov).onclick = () => {
+      const choices = {};
+      ov.querySelectorAll(".rec-row select").forEach((s) => (choices[newNames[+s.dataset.i]] = s.value));
+      ov.remove();
+      resolve(choices);
+    };
+    document.body.appendChild(ov);
+  });
 }
 
 // ---------- tiny helpers ----------
@@ -263,9 +310,9 @@ async function renderAdmin(preloaded) {
   c.appendChild(importSec);
 
   async function applyImported(imported) {
-    // Link the sheet's judges to existing roster judges (keeps their history + full names).
+    // Link the sheet's judges to existing roster judges; confirm any new ones.
     const rr = roster.length ? roster : await listRoster();
-    const rec = reconcileJudges(imported.judges, rr);
+    const rec = await linkJudges(imported.judges, rr);
     imported.judges = rec.judges;
     const merged = { ...blankEvent(imported.id), ...imported };
     LS.setActiveEvent(merged.id);
@@ -651,9 +698,9 @@ async function renderAdmin(preloaded) {
       alert("Add at least one criterion and one team first.");
       return;
     }
-    // Link judges to the roster so they keep their history and full names.
+    // Link judges to the roster (and confirm any new ones) so they keep history + full names.
     const rr = roster.length ? roster : await listRoster();
-    ev.judges = reconcileJudges(ev.judges, rr).judges;
+    ev.judges = (await linkJudges(ev.judges, rr)).judges;
     LS.setActiveEvent(ev.id);
     const btn = $("#save", c);
     btn.disabled = true;
