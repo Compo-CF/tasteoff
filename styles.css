@@ -52,6 +52,7 @@ button { font: inherit; cursor: pointer; }
 .card.results { border-left: 5px solid var(--brand-2); }
 .card.admin { border-left: 5px solid var(--muted); }
 .card.judgesdb { border-left: 5px solid #3b6ea5; }
+.card.history { border-left: 5px solid #2e7d47; }
 .foot { margin-top: 28px; color: var(--muted); font-size: 13px; }
 .demo-link { display: inline-block; margin-top: 6px; font-size: 13px; font-weight: 600; }
 

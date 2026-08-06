@@ -160,6 +160,62 @@ function pearson(x, y) {
   return den === 0 ? 0 : num / den;
 }
 
+// ---- Historical analysis (across events) ----------------------------------
+// Per-event summary: winner, field average, counts.
+export function eventsOverview(events, scoresByEvent) {
+  return events.map((ev) => {
+    const scores = scoresByEvent[ev.id] || [];
+    const { scaled } = computeLeaderboards(ev.criteria || [], ev.teams || [], scores);
+    const winner = scaled.find((r) => r.place === 1);
+    const flat = flatten(scores);
+    return {
+      id: ev.id,
+      name: ev.name || ev.id,
+      teams: (ev.teams || []).length,
+      judges: (ev.judges || []).length,
+      ballots: scores.length,
+      winner: winner ? winner.name || winner.code : "—",
+      fieldAvg: round2(mean(flat.map((f) => f.value))),
+    };
+  });
+}
+
+// Restaurant/dish track record aggregated by name across all events.
+export function restaurantHistory(events, scoresByEvent) {
+  const byName = {};
+  for (const ev of events) {
+    const scores = scoresByEvent[ev.id] || [];
+    const { scaled } = computeLeaderboards(ev.criteria || [], ev.teams || [], scores);
+    const field = scaled.length;
+    for (const row of scaled) {
+      if (!(row.scaled > 0)) continue; // only dishes that were actually judged
+      const key = row.name || row.code;
+      (byName[key] = byName[key] || { name: key, apps: [] }).apps.push({
+        event: ev.name || ev.id,
+        eventId: ev.id,
+        place: row.place,
+        field,
+        perJudge: round2(row.scaled / Math.max(1, row.judgeCount)), // ~0–36, comparable across events
+      });
+    }
+  }
+  return Object.values(byName)
+    .map((r) => {
+      const places = r.apps.map((a) => a.place);
+      return {
+        name: r.name,
+        appearances: r.apps.length,
+        wins: r.apps.filter((a) => a.place === 1).length,
+        podiums: r.apps.filter((a) => a.place <= 3).length,
+        bestPlace: Math.min(...places),
+        avgPlace: round2(mean(places)),
+        avgScore: round2(mean(r.apps.map((a) => a.perJudge))),
+        apps: r.apps.sort((a, b) => String(a.event).localeCompare(String(b.event))),
+      };
+    })
+    .sort((a, b) => b.wins - a.wins || a.avgPlace - b.avgPlace || b.appearances - a.appearances);
+}
+
 // ---- Cross-event judge database -------------------------------------------
 // events: [{id, name, criteria, teams}]  scoresByEvent: {eventId: [score,...]}
 // Returns per-judge learned profile aggregated across every event they judged.

@@ -20,7 +20,7 @@ import {
 import { BUILTIN_TEMPLATES, templateCriteria } from "./templates.js";
 import { computeLeaderboards, SCORE_STEPS } from "./scoring.js";
 import { parseFile, parseGoogleSheet, workbookToTemplates } from "./import-sheet.js";
-import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles } from "./analytics.js";
+import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles, eventsOverview, restaurantHistory } from "./analytics.js";
 import { barChart, divergingChart, histogram, radar } from "./charts.js";
 
 // stable judge id from a name, so the same person links across events
@@ -93,6 +93,7 @@ async function render() {
   if (path === "/judge") return renderJudge(params);
   if (path === "/results") return renderResults();
   if (path === "/judges") return renderJudgesDB();
+  if (path === "/history") return renderHistory();
   return renderHome();
 }
 
@@ -119,6 +120,10 @@ function renderHome() {
         <a class="card judgesdb" href="#/judges">
           <div class="ci">📊</div><h3>Judge database</h3>
           <p>How your judges behave over time.</p>
+        </a>
+        <a class="card history" href="#/history">
+          <div class="ci">📈</div><h3>Historical analysis</h3>
+          <p>Events &amp; restaurant track records.</p>
         </a>
       </div>
       <p class="foot">Add to Home Screen to use it like an app.</p>
@@ -1309,6 +1314,87 @@ async function renderJudgesDB() {
     );
   });
   c.appendChild(list);
+  app().replaceChildren(c);
+}
+
+// ---------- HISTORICAL ANALYSIS ----------
+async function renderHistory() {
+  const myToken = renderToken;
+  app().replaceChildren(
+    el(`<div class="wrap"><a class="back" href="#/">← home</a><h2>Historical analysis</h2><p class="sub">Loading past events…</p></div>`)
+  );
+  const { events, scoresByEvent } = await loadAllEventsWithScores();
+  if (isStale(myToken)) return;
+  // Prefer flagged historical events; fall back to all if none flagged.
+  let hist = events.filter((e) => e.historical);
+  if (!hist.length) hist = events;
+
+  const overview = eventsOverview(hist, scoresByEvent);
+  const restaurants = restaurantHistory(hist, scoresByEvent);
+  const totalBallots = overview.reduce((a, e) => a + e.ballots, 0);
+
+  const c = el(`<div class="wrap history">
+    <a class="back" href="#/">← home</a>
+    <h2>Historical analysis</h2>
+    <p class="sub">${hist.length} events · ${restaurants.length} restaurants · ${totalBallots} ballots. <a href="#/judges">Judge database →</a></p>
+    <div class="rcontrols"><div class="tabs">
+      <button class="tab active" data-tab="events">Events</button>
+      <button class="tab" data-tab="restaurants">Restaurants</button>
+    </div></div>
+    <div id="hhost"></div>
+  </div>`);
+  const host = $("#hhost", c);
+  let tab = "events";
+  c.querySelectorAll(".tab").forEach((t) => {
+    t.onclick = () => {
+      tab = t.dataset.tab;
+      c.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === t));
+      draw();
+    };
+  });
+  function draw() {
+    if (tab === "events") {
+      const rows = overview
+        .map(
+          (e) => `<tr>
+            <td>${esc(e.name)}</td>
+            <td class="tb">${e.teams}</td>
+            <td class="tb">${e.judges}</td>
+            <td class="tb">${e.ballots}</td>
+            <td class="sc">${e.fieldAvg}</td>
+            <td>🏆 ${esc(e.winner)}</td>
+          </tr>`
+        )
+        .join("");
+      host.replaceChildren(
+        el(`<div class="board"><table>
+          <thead><tr><th>Event</th><th>Teams</th><th>Judges</th><th>Ballots</th><th>Field avg</th><th>Winner (Scaled)</th></tr></thead>
+          <tbody>${rows}</tbody></table></div>`)
+      );
+    } else {
+      const rows = restaurants
+        .map(
+          (r, i) => `<tr>
+            <td class="pl">${i + 1}</td>
+            <td>${esc(r.name)}</td>
+            <td class="tb">${r.appearances}</td>
+            <td class="tb">${r.wins || "–"}</td>
+            <td class="tb">${r.podiums || "–"}</td>
+            <td class="tb">${ordinal(r.bestPlace)}</td>
+            <td class="sc">${r.avgPlace}</td>
+            <td class="sc">${r.avgScore}</td>
+          </tr>`
+        )
+        .join("");
+      host.replaceChildren(
+        el(`<div class="board"><table>
+          <thead><tr><th>#</th><th>Restaurant</th><th>Apps</th><th>Wins</th><th>Top 3</th><th>Best</th><th>Avg place</th><th>Avg score</th></tr></thead>
+          <tbody>${rows}</tbody></table></div>
+          <p class="tienote">“Apps” = events entered · “Avg score” = average points per judge (0–36), comparable across events.</p>`)
+      );
+    }
+  }
+  draw();
   app().replaceChildren(c);
 }
 
