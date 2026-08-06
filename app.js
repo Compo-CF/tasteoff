@@ -10,6 +10,7 @@ import {
   upsertJudges,
   listRoster,
   loadAllEventsWithScores,
+  getDemoData,
 } from "./firebase.js";
 import { computeLeaderboards, SCORE_STEPS } from "./scoring.js";
 import { parseFile, parseGoogleSheet } from "./import-sheet.js";
@@ -951,11 +952,16 @@ async function renderJudgesDB() {
   app().replaceChildren(
     el(`<div class="wrap"><a class="back" href="#/">← home</a><h2>Judge database</h2><p class="sub">Loading judges across all events…</p></div>`)
   );
-  const [{ events, scoresByEvent }, roster] = await Promise.all([
+  let [{ events, scoresByEvent }, roster] = await Promise.all([
     loadAllEventsWithScores(),
     listRoster(),
   ]);
   if (isStale(myToken)) return;
+  // Fall back to in-memory demo data (e.g. local preview with no backend).
+  if (!events.length) {
+    const demo = getDemoData();
+    if (demo) ({ events, scoresByEvent } = demo);
+  }
   const rosterMap = Object.fromEntries(roster.map((r) => [r.id, r]));
   const profiles = judgeProfiles(rosterMap, events, scoresByEvent);
 

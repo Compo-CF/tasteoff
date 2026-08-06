@@ -85,6 +85,15 @@ function demoNotify() {
   demoSubs.forEach((cb) => cb(rows));
 }
 
+// Demo data for the judge database (in-memory demo scores + the sample event).
+export function getDemoData() {
+  if (!demoScores.size) return null;
+  return {
+    events: [makeSampleEvent("demo")],
+    scoresByEvent: { demo: [...demoScores.values()] },
+  };
+}
+
 export function eventRef(eventId) {
   return doc(db, "events", eventId);
 }
