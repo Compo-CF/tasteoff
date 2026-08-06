@@ -81,6 +81,54 @@ export function dishFacets(criteria, scores, teamCode) {
   }));
 }
 
+// Deep analytics for a single dish.
+export function dishAnalytics(criteria, teams, scores, teamCode) {
+  const team = teams.find((t) => t.code === teamCode) || {};
+  const flat = flatten(scores).filter((f) => f.teamCode === teamCode);
+  const judges = [...new Set(flat.map((f) => f.judgeId))];
+
+  const perCriterion = criteria.map((c) => {
+    const vals = flat.filter((f) => f.critId === c.id).map((f) => f.value);
+    return {
+      id: c.id,
+      name: c.name,
+      short: c.shortName || c.name,
+      avg: round2(mean(vals)),
+      spread: round2(stdev(vals)),
+      n: vals.length,
+    };
+  });
+
+  const perJudge = judges
+    .map((jid) => {
+      const vals = flat.filter((f) => f.judgeId === jid).map((f) => f.value);
+      return { judgeId: jid, total: round2(vals.reduce((a, b) => a + b, 0)), avg: round2(mean(vals)), n: vals.length };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  // How divided were the judges on this dish? Spread of their per-dish averages.
+  const judgeSpread = round2(stdev(perJudge.map((j) => j.avg)));
+  const verdict =
+    perJudge.length < 2 ? "single judge" : judgeSpread <= 0.35 ? "strong consensus" : judgeSpread >= 0.8 ? "divisive" : "some disagreement";
+
+  const ranked = [...perCriterion].filter((c) => c.n > 0).sort((a, b) => b.avg - a.avg);
+
+  return {
+    code: teamCode,
+    name: team.name,
+    table: team.table,
+    dishNumber: team.dishNumber,
+    dishDescription: team.dishDescription,
+    judgeCount: judges.length,
+    perCriterion,
+    perJudge,
+    judgeSpread,
+    verdict,
+    best: ranked[0] || null,
+    worst: ranked[ranked.length - 1] || null,
+  };
+}
+
 // Which criterion best predicts final rank? Correlate each criterion's dish
 // average with the dish's scaled total (Pearson). Higher = drives the result.
 export function criterionInfluence(criteria, teams, scores) {

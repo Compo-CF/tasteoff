@@ -13,7 +13,7 @@ import {
 } from "./firebase.js";
 import { computeLeaderboards, SCORE_STEPS } from "./scoring.js";
 import { parseFile, parseGoogleSheet } from "./import-sheet.js";
-import { eventAnalytics, dishFacets, criterionInfluence, judgeProfiles } from "./analytics.js";
+import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles } from "./analytics.js";
 import { barChart, divergingChart, histogram, radar } from "./charts.js";
 
 // stable judge id from a name, so the same person links across events
@@ -839,15 +839,11 @@ function renderAnalytics(ev, scores, reveal) {
     { max: Math.max(0.5, ...a.judges.map((j) => j.spread)), color: "#3b6ea5" }
   );
   const inflBars = divergingChart(infl.map((c) => ({ label: c.short, value: c.r })), { max: 1 });
-  const winnerRadar = winner
-    ? radar(dishFacets(ev.criteria, scores, winner.code), { max: 5 })
-    : `<p class="hint">No winner yet.</p>`;
-  const winnerLabel = winner ? (reveal ? winner.name || winner.code : "Team #" + winner.code) : "";
 
   const card = (title, sub, body) =>
     `<div class="acard"><h4>${esc(title)}</h4>${sub ? `<p class="asub">${esc(sub)}</p>` : ""}${body}</div>`;
 
-  return el(`<div class="analytics">
+  const wrap = el(`<div class="analytics">
     <div class="astat">
       <div><b>${a.fieldAvg}</b><span>field average</span></div>
       <div><b>${a.strongest ? esc(a.strongest.short) : "–"}</b><span>strongest facet</span></div>
@@ -859,9 +855,72 @@ function renderAnalytics(ev, scores, reveal) {
       ${card("Judge generosity", "Above (+) or below (−) the field average", genBars)}
       ${card("Judge consistency", "Spread of a judge's scores — lower is steadier", consBars)}
       ${card("What drove the results", "Correlation of each facet with final score", inflBars)}
-      ${card("Winner's facets" + (winnerLabel ? " — " + winnerLabel : ""), "Average score per criterion", winnerRadar)}
+    </div>
+    <div class="dishdive acard">
+      <div class="dd-head"><h4>Dish deep-dive</h4>
+        <select id="ddSel"></select></div>
+      <div id="ddBody"></div>
     </div>
   </div>`);
+
+  // Populate the dish selector with scored dishes (winner first).
+  const scored = scaled.filter((r) => r.scaled > 0);
+  const sel = $("#ddSel", wrap);
+  const ddBody = $("#ddBody", wrap);
+  const mmByCode = Object.fromEntries(
+    computeLeaderboards(ev.criteria, ev.teams, scores).minmax.map((r) => [r.code, r])
+  );
+  scored.forEach((r) => {
+    const label = reveal ? r.name || r.code : "Team #" + r.code;
+    sel.appendChild(el(`<option value="${esc(r.code)}">${esc(label)} — ${r.scaled}</option>`));
+  });
+
+  function drawDish(code) {
+    if (!code) {
+      ddBody.replaceChildren(el(`<p class="hint">No scored dishes yet.</p>`));
+      return;
+    }
+    const d = dishAnalytics(ev.criteria, ev.teams, scores, code);
+    const srow = scaled.find((r) => r.code === code) || {};
+    const mrow = mmByCode[code] || {};
+    const nameOf = Object.fromEntries((ev.judges || []).map((j) => [j.id, j.name]));
+    const facetBars = barChart(d.perCriterion.map((c) => ({ label: c.short, value: c.avg })), { max: 5 });
+    const rdr = radar(dishFacets(ev.criteria, scores, code), { max: 5 });
+    const judgeRows = d.perJudge
+      .map(
+        (j, i) => `<tr>
+          <td>${esc(nameOf[j.judgeId] || j.judgeId)}</td>
+          <td class="jt">${j.avg}</td>
+          <td class="tot">${j.total}${i === 0 && d.perJudge.length > 1 ? ' <span class="hi">▲ high</span>' : ""}${
+          i === d.perJudge.length - 1 && d.perJudge.length > 1 ? ' <span class="lo">▼ low</span>' : ""
+        }</td>
+        </tr>`
+      )
+      .join("");
+    const vClass = d.verdict === "divisive" ? "divisive" : d.verdict === "strong consensus" ? "consensus" : "mid";
+
+    ddBody.replaceChildren(
+      el(`<div class="dd-detail">
+        <div class="dd-meta">
+          <span class="dd-rank">Scaled #${srow.place ?? "–"}${srow.tieBroken ? " △" : ""} · Min-Max #${mrow.place ?? "–"}</span>
+          <span class="dd-verdict ${vClass}">${esc(d.verdict)} (σ ${d.judgeSpread})</span>
+        </div>
+        ${d.dishDescription ? `<p class="dd-desc">${esc(d.dishDescription)}</p>` : ""}
+        <div class="dd-cols">
+          <div class="dd-radar">${rdr}</div>
+          <div class="dd-bars">${facetBars}</div>
+        </div>
+        <div class="dd-hl">${d.best ? `Best: <b>${esc(d.best.short)}</b> (${d.best.avg})` : ""}${
+        d.worst && d.worst !== d.best ? ` · Weakest: <b>${esc(d.worst.short)}</b> (${d.worst.avg})` : ""
+      }</div>
+        <table class="dd-judges"><thead><tr><th>Judge</th><th>avg</th><th>total</th></tr></thead><tbody>${judgeRows}</tbody></table>
+      </div>`)
+    );
+  }
+  sel.onchange = () => drawDish(sel.value);
+  drawDish(winner ? winner.code : scored[0] && scored[0].code);
+
+  return wrap;
 }
 
 function judgesPerTeam(ev) {

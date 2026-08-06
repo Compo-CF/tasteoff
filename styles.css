@@ -191,6 +191,30 @@ input, select {
 .chart .c-area { fill: rgba(181,54,31,.22); stroke: var(--brand); stroke-width: 1.5; }
 .radar { max-width: 300px; display: block; margin: 0 auto; }
 
+/* dish deep-dive */
+.dishdive { margin-top: 14px; }
+.dd-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.dd-head h4 { margin: 0; }
+.dd-head select { width: auto; max-width: 60%; margin: 0; }
+.dd-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px; }
+.dd-rank { font-weight: 700; }
+.dd-verdict { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
+.dd-verdict.consensus { background: #eaf5ee; color: #2e7d47; }
+.dd-verdict.divisive { background: #fdecea; color: var(--warn); }
+.dd-verdict.mid { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.dd-desc { color: var(--muted); font-size: 13px; margin: 2px 0 8px; }
+.dd-cols { display: grid; gap: 8px; }
+@media (min-width: 560px) { .dd-cols { grid-template-columns: 1fr 1fr; align-items: center; } }
+.dd-hl { font-size: 13px; color: var(--muted); margin: 8px 0; }
+.dd-hl b { color: var(--ink); }
+.dd-judges { width: 100%; border-collapse: collapse; font-size: 13px; }
+.dd-judges th, .dd-judges td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--line); }
+.dd-judges th { color: var(--muted); font-size: 11px; font-weight: 600; }
+.dd-judges .jt, .dd-judges .tot { text-align: right; font-variant-numeric: tabular-nums; }
+.dd-judges .hi { color: #2e7d47; font-size: 11px; }
+.dd-judges .lo { color: var(--warn); font-size: 11px; }
+@media (prefers-color-scheme: dark) { .dd-verdict.consensus { background: #17321f; } .dd-verdict.divisive { background: #3a1b18; } }
+
 /* judges database */
 .jdb-list { display: grid; gap: 12px; }
 @media (min-width: 620px) { .jdb-list { grid-template-columns: 1fr 1fr; } }
