@@ -1,0 +1,16 @@
+{
+  "name": "tasteoff — food judging",
+  "short_name": "tasteoff",
+  "description": "Score food competitions on your phone; live collated results.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#faf7f4",
+  "theme_color": "#b5361f",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

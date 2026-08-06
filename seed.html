@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Seed HouBBQ 2026 — tasteoff</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <a class="back" href="index.html">← app</a>
+      <h2>Seed: HouBBQ Throwdown 2026</h2>
+      <p class="sub">Writes the event (criteria, 5 judges, 13 teams + codes) to Firestore. Safe to re-run — it overwrites the same event.</p>
+      <button class="primary" id="go">Seed event now</button>
+      <p id="out" class="sub" style="margin-top:14px"></p>
+    </div>
+    <script type="module">
+      import { seed } from "./seed-houbbq.js";
+      document.getElementById("go").onclick = async () => {
+        const out = document.getElementById("out");
+        out.textContent = "Seeding…";
+        try {
+          const id = await seed();
+          out.textContent = `✓ Seeded "${id}". Open the app → Set up event to review, or Results to watch.`;
+        } catch (e) {
+          out.textContent = "Error: " + (e?.message || e);
+        }
+      };
+    </script>
+  </body>
+</html>
