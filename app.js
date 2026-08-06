@@ -1,5 +1,5 @@
 // app.js — tasteoff SPA: router + Admin / Judge / Results views.
-import { loadEvent, saveEvent, watchScores, submitScore } from "./firebase.js";
+import { loadEvent, saveEvent, saveEventSafe, watchScores, submitScore } from "./firebase.js";
 import { computeLeaderboards, SCORE_STEPS } from "./scoring.js";
 import { parseFile, parseGoogleSheet } from "./import-sheet.js";
 
@@ -45,7 +45,16 @@ function parseRoute() {
 window.addEventListener("hashchange", render);
 window.addEventListener("load", render);
 
+// Render token: bumped on every (re)render so a slow async view that resolves
+// late can detect it's stale and skip clobbering a newer one.
+let renderToken = 0;
+function beginRender() {
+  return ++renderToken;
+}
+const isStale = (t) => t !== renderToken;
+
 async function render() {
+  beginRender();
   const { path, params } = parseRoute();
   if (params.get("event")) LS.setActiveEvent(params.get("event"));
   // Home renders instantly. Data views call loadEvent(), which awaits auth
@@ -85,9 +94,12 @@ function renderHome() {
 
 // ---------- ADMIN ----------
 let adminUnlocked = false;
-async function renderAdmin() {
-  const eventId = LS.activeEvent();
-  let ev = await loadEvent(eventId);
+async function renderAdmin(preloaded) {
+  const myToken = renderToken;
+  const eventId = preloaded ? preloaded.id : LS.activeEvent();
+  // `preloaded` (from a spreadsheet import) renders instantly — no network.
+  let ev = preloaded || (await loadEvent(eventId));
+  if (isStale(myToken)) return; // a newer render started while we awaited
 
   // Fresh event scaffold if none exists yet.
   if (!ev) {
@@ -127,14 +139,17 @@ async function renderAdmin() {
     </section>`);
   c.appendChild(importSec);
 
-  async function applyImported(imported) {
-    ev = { ...blankEvent(imported.id), ...imported };
-    LS.setActiveEvent(ev.id);
-    const { id, ...data } = ev;
-    await saveEvent(ev.id, { ...data, id: ev.id });
+  function applyImported(imported) {
+    const merged = { ...blankEvent(imported.id), ...imported };
+    LS.setActiveEvent(merged.id);
     adminUnlocked = true;
-    toast("Imported ✓");
-    renderAdmin();
+    // Bump the token so any in-flight renderAdmin (still awaiting loadEvent)
+    // sees itself as stale and won't clobber this imported view.
+    beginRender();
+    // Populate the form instantly from the parsed file — no Firebase round-trip.
+    // The organizer reviews, then clicks "Save event" to persist.
+    renderAdmin(merged);
+    toast("Loaded ✓ — review below, then Save event");
   }
   $("#gsGo", importSec).onclick = async () => {
     const msg = $("#importMsg", importSec);
@@ -366,9 +381,25 @@ async function renderAdmin() {
       return;
     }
     LS.setActiveEvent(ev.id);
+    const btn = $("#save", c);
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = "Saving…";
     const { id, ...data } = ev;
-    await saveEvent(ev.id, { ...data, id: ev.id });
-    toast("Saved ✓");
+    const res = await saveEventSafe(ev.id, { ...data, id: ev.id });
+    btn.disabled = false;
+    btn.textContent = label;
+    if (res.ok) {
+      toast("Saved ✓");
+    } else if (res.queued) {
+      alert(
+        "Your event is saved on this device, but couldn't reach Firebase yet.\n\n" +
+          "Enable Anonymous sign-in and create Firestore in the Firebase console, then " +
+          "click Save again — it will sync. (Your entries stay here meanwhile.)"
+      );
+    } else {
+      alert("Save failed: " + res.error);
+    }
   };
   $("#links", c).onclick = () => showLinks(ev, $("#linkbox", c));
 
@@ -414,9 +445,11 @@ function makeQR(container, text) {
 
 // ---------- JUDGE ----------
 async function renderJudge(params) {
+  const myToken = renderToken;
   const eventId = params.get("event") || LS.activeEvent();
   const tableHint = params.get("table");
   const ev = await loadEvent(eventId);
+  if (isStale(myToken)) return;
   if (!ev) {
     app().replaceChildren(
       el(`<div class="wrap"><a class="back" href="#/">← home</a><p class="empty">No event found. Ask the organizer for the link.</p></div>`)
@@ -626,8 +659,10 @@ function suggestedIndex(teams, schedule) {
 // ---------- RESULTS ----------
 let resultsUnlocked = false;
 async function renderResults() {
+  const myToken = renderToken;
   const eventId = LS.activeEvent();
   const ev = await loadEvent(eventId);
+  if (isStale(myToken)) return;
   if (!ev) {
     app().replaceChildren(
       el(`<div class="wrap"><a class="back" href="#/">← home</a><p class="empty">No event found.</p></div>`)

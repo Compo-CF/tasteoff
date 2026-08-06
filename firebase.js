@@ -87,17 +87,40 @@ export function eventRef(eventId) {
   return doc(db, "events", eventId);
 }
 
+function withTimeout(promise, ms, onTimeout) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(onTimeout), ms)),
+  ]);
+}
+
 export async function loadEvent(eventId) {
   if (isDemo(eventId)) return makeSampleEvent("demo");
   try {
-    await authReady;
-    const snap = await getDoc(eventRef(eventId));
+    await withTimeout(authReady, 4000, null);
+    // Don't let a stalled network hang the UI — cap the read.
+    const snap = await withTimeout(getDoc(eventRef(eventId)), 4000, "__timeout__");
+    if (snap === "__timeout__") {
+      console.warn("loadEvent timed out (Firebase not reachable yet)");
+      return null;
+    }
     return snap.exists() ? { id: snap.id, ...snap.data() } : null;
   } catch (err) {
     // Offline or auth/rules not ready yet — let the UI render its empty shell.
     console.warn("loadEvent failed (rendering empty shell):", err?.code || err);
     return null;
   }
+}
+
+// Save that never hangs the UI: resolves {ok:true} on server ack, or
+// {ok:false, queued:true} if it can't reach Firebase within `ms` (the write is
+// held in the local cache and will sync once auth/Firestore are enabled).
+export async function saveEventSafe(eventId, data, ms = 4000) {
+  const p = saveEvent(eventId, data).then(
+    () => ({ ok: true }),
+    (err) => ({ ok: false, error: err?.code || String(err) })
+  );
+  return withTimeout(p, ms, { ok: false, queued: true });
 }
 
 export async function saveEvent(eventId, data) {

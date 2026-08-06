@@ -57,10 +57,16 @@ function addMinutes(hhmm, mins) {
   return `${String(Math.floor(t / 60) % 24).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
 }
 
+function hm(h, m) {
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 function normTime(v, fallback) {
   if (v === "" || v == null) return fallback;
-  // SheetJS may hand back "1:00:00 PM", "13:00", or a fraction-ish string.
+  // Excel Date object (SheetJS cellDates) — read wall-clock time.
+  if (v instanceof Date && !isNaN(v)) return hm(v.getHours(), v.getMinutes());
   const s = String(v).trim();
+  // "1:00:00 PM", "13:00", "2:05 pm"
   const ampm = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)?$/i);
   if (ampm) {
     let h = +ampm[1];
@@ -68,7 +74,13 @@ function normTime(v, fallback) {
     const ap = (ampm[3] || "").toLowerCase();
     if (ap === "pm" && h < 12) h += 12;
     if (ap === "am" && h === 12) h = 0;
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    return hm(h, m);
+  }
+  // Excel time serial (fraction of a day, e.g. 0.5868 → 14:05).
+  const num = parseFloat(s);
+  if (!Number.isNaN(num) && num > 0 && num < 1) {
+    const mins = Math.round(num * 24 * 60);
+    return hm(Math.floor(mins / 60) % 24, mins % 60);
   }
   return fallback;
 }
