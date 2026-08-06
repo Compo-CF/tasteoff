@@ -172,6 +172,59 @@ export async function deleteEvent(eventId) {
   await deleteDoc(eventRef(eventId));
 }
 
+// ---- Master judge roster (top-level `judges` collection) ------------------
+// Judge id is a stable slug of the name, so the same person links across events.
+export async function upsertJudges(judges) {
+  await authReady;
+  await Promise.all(
+    (judges || [])
+      .filter((j) => j && j.id && j.name)
+      .map((j) =>
+        setDoc(doc(db, "judges", j.id), { name: j.name, updatedAt: serverTimestamp() }, { merge: true })
+      )
+  );
+}
+
+export async function listRoster() {
+  try {
+    await withTimeout(authReady, 4000, null);
+    const snap = await withTimeout(getDocs(collection(db, "judges")), 5000, null);
+    if (!snap) return [];
+    const rows = [];
+    snap.forEach((d) => rows.push({ id: d.id, ...d.data() }));
+    return rows.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  } catch (err) {
+    console.warn("listRoster failed:", err?.code || err);
+    return [];
+  }
+}
+
+export async function getEventScoresOnce(eventId) {
+  await authReady;
+  const snap = await getDocs(collection(db, "events", eventId, "scores"));
+  const rows = [];
+  snap.forEach((d) => rows.push({ id: d.id, ...d.data() }));
+  return rows;
+}
+
+// Load every event (full config) + its scores — powers the judge database.
+export async function loadAllEventsWithScores() {
+  const list = await listEvents();
+  const events = [];
+  const scoresByEvent = {};
+  for (const meta of list) {
+    const full = await loadEvent(meta.id);
+    if (!full) continue;
+    events.push(full);
+    try {
+      scoresByEvent[meta.id] = await getEventScoresOnce(meta.id);
+    } catch {
+      scoresByEvent[meta.id] = [];
+    }
+  }
+  return { events, scoresByEvent };
+}
+
 export function scoreId(judgeId, teamCode) {
   return `${judgeId}__${teamCode}`;
 }

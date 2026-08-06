@@ -24,6 +24,7 @@ export function scaleFactor(weight) {
 export function computeDishTotals(criteria, scoresByJudge) {
   let scaled = 0;
   let minmax = 0;
+  let fives = 0;
   const perCriterion = [];
   const judgeIds = Object.keys(scoresByJudge || {});
 
@@ -35,6 +36,7 @@ export function computeDishTotals(criteria, scoresByJudge) {
       if (typeof v === "number" && !Number.isNaN(v) && v > 0) vals.push(v);
     }
     const sum = vals.reduce((a, b) => a + b, 0);
+    fives += vals.filter((v) => v === 5).length;
     let trimmed = sum;
     if (vals.length >= 3) {
       trimmed = sum - Math.max(...vals) - Math.min(...vals);
@@ -56,6 +58,7 @@ export function computeDishTotals(criteria, scoresByJudge) {
     scaled: round2(scaled),
     minmax: round2(minmax),
     perCriterion,
+    fives,
     judgeCount: judgeIds.length,
   };
 }
@@ -89,29 +92,57 @@ export function computeLeaderboards(criteria, teams, scores) {
       minmax: totals.minmax,
       judgeCount: totals.judgeCount,
       perCriterion: totals.perCriterion,
+      fives: totals.fives,
     });
   }
 
-  const scaledRanked = rankBy(rows, "scaled");
-  const minmaxRanked = rankBy(rows, "minmax");
+  const scaledRanked = rankBy(rows, "scaled", criteria);
+  const minmaxRanked = rankBy(rows, "minmax", criteria);
   return { scaled: scaledRanked, minmax: minmaxRanked };
 }
 
-function rankBy(rows, key) {
-  const sorted = rows
-    .map((r) => ({ ...r }))
-    .sort((a, b) => b[key] - a[key]);
-  // Standard competition ranking (1,2,2,4) on ties.
-  let place = 0;
-  let prev = null;
-  sorted.forEach((r, i) => {
-    if (prev === null || r[key] !== prev) {
-      place = i + 1;
+// Strict, never-tied ranking. Order:
+//   1) higher primary total (scaled or minmax)
+//   2) TIEBREAK "criterion priority": higher summed judge score on the
+//      highest-WEIGHTED criterion, then the next-highest, and so on
+//   3) deterministic fallback: higher raw total across all criteria, then more
+//      top (perfect-5) scores, then lower code string — so places are unique.
+// `tieBroken` is set on any row whose rank over the row above it was decided by
+// step 2 or 3 (i.e. the primary totals were equal) so the UI can flag it.
+function rankBy(rows, key, criteria) {
+  // criteria in descending weight order for the priority tiebreak
+  const byWeight = [...criteria].sort((a, b) => (b.weight || 0) - (a.weight || 0));
+  const critSum = (row, cid) => {
+    const pc = (row.perCriterion || []).find((p) => p.id === cid);
+    return pc ? pc.sum : 0;
+  };
+  const rawTotal = (row) => (row.perCriterion || []).reduce((a, p) => a + p.sum, 0);
+
+  const cmp = (a, b) => {
+    if (b[key] !== a[key]) return { d: b[key] - a[key], tie: false };
+    // primary totals equal → tiebreak cascade
+    for (const c of byWeight) {
+      const d = critSum(b, c.id) - critSum(a, c.id);
+      if (d !== 0) return { d, tie: true };
     }
-    r.place = r[key] > 0 ? place : null; // unscored dishes get no place
-    prev = r[key];
+    const rt = rawTotal(b) - rawTotal(a);
+    if (rt !== 0) return { d: rt, tie: true };
+    const fives = (b.fives || 0) - (a.fives || 0);
+    if (fives !== 0) return { d: fives, tie: true };
+    // last resort: stable, deterministic
+    return { d: String(a.code).localeCompare(String(b.code)), tie: true };
+  };
+
+  const scored = rows.filter((r) => r[key] > 0).map((r) => ({ ...r }));
+  const unscored = rows.filter((r) => !(r[key] > 0)).map((r) => ({ ...r, place: null }));
+
+  scored.sort((a, b) => cmp(a, b).d);
+  scored.forEach((r, i) => {
+    r.place = i + 1; // strictly unique — no ties, ever
+    r.tieBroken = i > 0 && cmp(scored[i - 1], r).tie;
   });
-  return sorted;
+
+  return [...scored, ...unscored];
 }
 
 export function round2(n) {

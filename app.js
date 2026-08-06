@@ -7,9 +7,19 @@ import {
   deleteEvent,
   watchScores,
   submitScore,
+  upsertJudges,
+  listRoster,
+  loadAllEventsWithScores,
 } from "./firebase.js";
 import { computeLeaderboards, SCORE_STEPS } from "./scoring.js";
 import { parseFile, parseGoogleSheet } from "./import-sheet.js";
+import { eventAnalytics, dishFacets, criterionInfluence, judgeProfiles } from "./analytics.js";
+import { barChart, divergingChart, histogram, radar } from "./charts.js";
+
+// stable judge id from a name, so the same person links across events
+function judgeKey(name) {
+  return "j_" + String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 24);
+}
 
 // ---------- tiny helpers ----------
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -70,6 +80,7 @@ async function render() {
   if (path === "/admin") return renderAdmin();
   if (path === "/judge") return renderJudge(params);
   if (path === "/results") return renderResults();
+  if (path === "/judges") return renderJudgesDB();
   return renderHome();
 }
 
@@ -92,6 +103,10 @@ function renderHome() {
         <a class="card admin" href="#/admin">
           <div class="ci">⚙️</div><h3>Set up event</h3>
           <p>Criteria, judges, teams, codes.</p>
+        </a>
+        <a class="card judgesdb" href="#/judges">
+          <div class="ci">📊</div><h3>Judge database</h3>
+          <p>How your judges behave over time.</p>
         </a>
       </div>
       <p class="foot">Add to Home Screen to use it like an app.</p>
@@ -329,11 +344,12 @@ async function renderAdmin(preloaded) {
     });
   }
   function readJudges() {
-    ev.judges = [...jList.querySelectorAll(".jrow")].map((r) => ({
-      id: ev.judges[+r.dataset.i]?.id || uid("j"),
-      name: r.querySelector(".jn").value.trim(),
-      table: r.querySelector(".jt").value,
-    }));
+    ev.judges = [...jList.querySelectorAll(".jrow")]
+      .map((r) => {
+        const name = r.querySelector(".jn").value.trim();
+        return { id: judgeKey(name), name, table: r.querySelector(".jt").value };
+      })
+      .filter((j) => j.name);
   }
   $("#addJ", jSec).onclick = () => {
     readJudges();
@@ -441,6 +457,7 @@ async function renderAdmin(preloaded) {
     btn.textContent = "Saving…";
     const { id, ...data } = ev;
     const res = await saveEventSafe(ev.id, { ...data, id: ev.id });
+    upsertJudges(ev.judges); // add/update judges in the master roster (fire-and-forget)
     btn.disabled = false;
     btn.textContent = label;
     if (res.ok) {
@@ -737,6 +754,7 @@ async function renderResults() {
     ev.name || "Results"
   )}</div><button class="mini" id="csv">export CSV</button></div>`));
   const controls = el(`<div class="rcontrols">
+      <div class="tabs"><button class="tab active" data-tab="board">Leaderboard</button><button class="tab" data-tab="analytics">Analytics</button></div>
       <label class="reveal"><input type="checkbox" id="reveal"> reveal team names</label>
       <span class="prog" id="prog"></span>
     </div>`);
@@ -746,10 +764,18 @@ async function renderResults() {
   app().replaceChildren(c);
 
   let reveal = false;
+  let tab = "board";
   $("#reveal", c).onchange = (e) => {
     reveal = e.target.checked;
     draw();
   };
+  controls.querySelectorAll(".tab").forEach((t) => {
+    t.onclick = () => {
+      tab = t.dataset.tab;
+      controls.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === t));
+      draw();
+    };
+  });
 
   let latestScores = [];
   watchScores(eventId, (rows) => {
@@ -758,18 +784,19 @@ async function renderResults() {
   });
 
   function draw() {
-    const { scaled, minmax } = computeLeaderboards(ev.criteria, ev.teams, latestScores);
-    const expected = ev.teams.length * judgesPerTeam(ev);
-    $("#prog", c).textContent = `${latestScores.length} score sheets in · ${
-      ev.teams.length
-    } dishes`;
-
-    host.replaceChildren(
-      el(`<div class="boards">
-        ${board("Scaled (all judges)", scaled, reveal)}
-        ${board("Min-Max (drop hi/low)", minmax, reveal)}
-      </div>`)
-    );
+    $("#prog", c).textContent = `${latestScores.length} score sheets in · ${ev.teams.length} dishes`;
+    if (tab === "board") {
+      const { scaled, minmax } = computeLeaderboards(ev.criteria, ev.teams, latestScores);
+      host.replaceChildren(
+        el(`<div class="boards">
+          ${board("Scaled (all judges)", scaled, reveal)}
+          ${board("Min-Max (drop hi/low)", minmax, reveal)}
+        </div>
+        <p class="tienote">△ = position decided by tiebreaker (equal totals, broken by criterion priority).</p>`)
+      );
+    } else {
+      host.replaceChildren(renderAnalytics(ev, latestScores, reveal));
+    }
   }
 
   $("#csv", c).onclick = () => exportCSV(ev, latestScores);
@@ -779,7 +806,7 @@ function board(title, rows, reveal) {
   const body = rows
     .map(
       (r) => `<tr class="${r.place === 1 ? "first" : ""}">
-        <td class="pl">${r.place ?? "–"}</td>
+        <td class="pl">${r.place ?? "–"}${r.tieBroken ? '<span class="tie" title="tiebreak">△</span>' : ""}</td>
         <td>${reveal ? esc(r.name || r.code) : esc(r.code)}</td>
         <td class="tb">${esc(r.table)}</td>
         <td class="sc">${title.startsWith("Scaled") ? r.scaled : r.minmax}</td>
@@ -790,6 +817,51 @@ function board(title, rows, reveal) {
   return `<div class="board"><h3>${esc(title)}</h3>
     <table><thead><tr><th>#</th><th>${reveal ? "Team" : "Code"}</th><th>Tbl</th><th>Score</th><th>Judges</th></tr></thead>
     <tbody>${body}</tbody></table></div>`;
+}
+
+// Analytics tab content
+function renderAnalytics(ev, scores, reveal) {
+  if (!scores.length) return el(`<p class="empty">No scores yet — analytics appear as judges submit.</p>`);
+  const a = eventAnalytics(ev.criteria, ev.teams, scores);
+  const infl = criterionInfluence(ev.criteria, ev.teams, scores);
+  const { scaled } = computeLeaderboards(ev.criteria, ev.teams, scores);
+  const winner = scaled.find((r) => r.place === 1);
+  const judgeName = Object.fromEntries((ev.judges || []).map((j) => [j.id, j.name]));
+
+  const critBars = barChart(a.perCriterion.map((c) => ({ label: c.short, value: c.avg })), { max: 5, unit: "" });
+  const disto = histogram(a.distribution);
+  const genBars = divergingChart(
+    a.judges.map((j) => ({ label: judgeName[j.judgeId] || j.judgeId, value: j.generosity })),
+    { max: Math.max(0.5, ...a.judges.map((j) => Math.abs(j.generosity))) }
+  );
+  const consBars = barChart(
+    a.judges.map((j) => ({ label: judgeName[j.judgeId] || j.judgeId, value: j.spread })),
+    { max: Math.max(0.5, ...a.judges.map((j) => j.spread)), color: "#3b6ea5" }
+  );
+  const inflBars = divergingChart(infl.map((c) => ({ label: c.short, value: c.r })), { max: 1 });
+  const winnerRadar = winner
+    ? radar(dishFacets(ev.criteria, scores, winner.code), { max: 5 })
+    : `<p class="hint">No winner yet.</p>`;
+  const winnerLabel = winner ? (reveal ? winner.name || winner.code : "Team #" + winner.code) : "";
+
+  const card = (title, sub, body) =>
+    `<div class="acard"><h4>${esc(title)}</h4>${sub ? `<p class="asub">${esc(sub)}</p>` : ""}${body}</div>`;
+
+  return el(`<div class="analytics">
+    <div class="astat">
+      <div><b>${a.fieldAvg}</b><span>field average</span></div>
+      <div><b>${a.strongest ? esc(a.strongest.short) : "–"}</b><span>strongest facet</span></div>
+      <div><b>${a.weakest ? esc(a.weakest.short) : "–"}</b><span>weakest facet</span></div>
+    </div>
+    <div class="agrid">
+      ${card("Average score by criterion", "Which facets scored high across all dishes", critBars)}
+      ${card("Score distribution", "How judges used the 1–5 scale", disto)}
+      ${card("Judge generosity", "Above (+) or below (−) the field average", genBars)}
+      ${card("Judge consistency", "Spread of a judge's scores — lower is steadier", consBars)}
+      ${card("What drove the results", "Correlation of each facet with final score", inflBars)}
+      ${card("Winner's facets" + (winnerLabel ? " — " + winnerLabel : ""), "Average score per criterion", winnerRadar)}
+    </div>
+  </div>`);
 }
 
 function judgesPerTeam(ev) {
@@ -812,6 +884,60 @@ function exportCSV(ev, scores) {
   a.href = URL.createObjectURL(blob);
   a.download = `${ev.id}-results.csv`;
   a.click();
+}
+
+// ---------- JUDGES DATABASE ----------
+async function renderJudgesDB() {
+  const myToken = renderToken;
+  app().replaceChildren(
+    el(`<div class="wrap"><a class="back" href="#/">← home</a><h2>Judge database</h2><p class="sub">Loading judges across all events…</p></div>`)
+  );
+  const [{ events, scoresByEvent }, roster] = await Promise.all([
+    loadAllEventsWithScores(),
+    listRoster(),
+  ]);
+  if (isStale(myToken)) return;
+  const rosterMap = Object.fromEntries(roster.map((r) => [r.id, r]));
+  const profiles = judgeProfiles(rosterMap, events, scoresByEvent);
+
+  const c = el(`<div class="wrap judgesdb"><a class="back" href="#/">← home</a>
+    <h2>Judge database</h2>
+    <p class="sub">${profiles.length} judge(s) · ${events.length} event(s). Learned from every submitted ballot.</p></div>`);
+
+  if (!profiles.length) {
+    c.appendChild(el(`<p class="empty">No judging data yet. Once judges submit scores in an event, their profiles build here automatically.</p>`));
+    app().replaceChildren(c);
+    return;
+  }
+
+  const list = el(`<div class="jdb-list"></div>`);
+  profiles.forEach((p) => {
+    const gTag =
+      p.generosity > 0.15 ? `<span class="tag gen">generous +${p.generosity}</span>`
+      : p.generosity < -0.15 ? `<span class="tag harsh">harsh ${p.generosity}</span>`
+      : `<span class="tag neu">balanced</span>`;
+    const cTag =
+      p.consistency <= 0.8 ? `<span class="tag steady">very consistent</span>`
+      : p.consistency >= 1.4 ? `<span class="tag swingy">high spread</span>`
+      : `<span class="tag neu">typical spread</span>`;
+    const crit = Object.keys(p.perCriterion)
+      .map((k) => `<span class="pcrit">${esc(k)} <b>${p.perCriterion[k]}</b></span>`)
+      .join("");
+    list.appendChild(
+      el(`<div class="jdb-card">
+        <div class="jdb-head"><h3>${esc(p.name)}</h3><span class="jdb-meta">${p.eventsJudged} event(s) · ${p.dishesScored} dishes</span></div>
+        <div class="jdb-stats">
+          <div><b>${p.avgScore}</b><span>avg score</span></div>
+          <div><b>${p.generosity > 0 ? "+" : ""}${p.generosity}</b><span>vs field</span></div>
+          <div><b>${p.consistency}</b><span>spread (σ)</span></div>
+        </div>
+        <div class="jdb-tags">${gTag}${cTag}</div>
+        <div class="jdb-crit">${crit}</div>
+      </div>`)
+    );
+  });
+  c.appendChild(list);
+  app().replaceChildren(c);
 }
 
 // ---------- shared UI ----------

@@ -51,6 +51,7 @@ button { font: inherit; cursor: pointer; }
 .card.judge { border-left: 5px solid var(--brand); }
 .card.results { border-left: 5px solid var(--brand-2); }
 .card.admin { border-left: 5px solid var(--muted); }
+.card.judgesdb { border-left: 5px solid #3b6ea5; }
 .foot { margin-top: 28px; color: var(--muted); font-size: 13px; }
 .demo-link { display: inline-block; margin-top: 6px; font-size: 13px; font-weight: 600; }
 
@@ -161,6 +162,60 @@ input, select {
 .board .jc, .board .tb { text-align: center; color: var(--muted); }
 .board tr.first td { background: linear-gradient(90deg, rgba(224,138,44,.16), transparent); }
 .board tr.first .pl { color: var(--brand-2); }
+.board .pl .tie { color: var(--brand-2); font-size: 11px; margin-left: 2px; vertical-align: super; }
+.tienote { color: var(--muted); font-size: 12px; margin-top: 8px; }
+
+/* results tabs */
+.rcontrols { flex-wrap: wrap; gap: 8px; }
+.tabs { display: inline-flex; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 2px; }
+.tab { background: transparent; border: none; color: var(--muted); padding: 7px 14px; border-radius: 8px; font-weight: 600; }
+.tab.active { background: var(--brand); color: #fff; }
+
+/* analytics */
+.astat { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 14px; }
+.astat > div { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center; box-shadow: var(--shadow); }
+.astat b { display: block; font-size: 20px; }
+.astat span { color: var(--muted); font-size: 12px; }
+.agrid { display: grid; gap: 14px; }
+@media (min-width: 680px) { .agrid { grid-template-columns: 1fr 1fr; } }
+.acard { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; box-shadow: var(--shadow); }
+.acard h4 { margin: 0 0 2px; }
+.asub { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+.chart { width: 100%; height: auto; }
+.chart .c-lbl { font-size: 11px; fill: var(--ink); }
+.chart .c-val { font-size: 11px; fill: var(--muted); font-weight: 600; }
+.chart .c-tick { font-size: 10px; fill: var(--muted); }
+.chart .c-track { fill: var(--line); }
+.chart .c-axis { stroke: var(--line); }
+.chart .c-ring { fill: none; stroke: var(--line); }
+.chart .c-area { fill: rgba(181,54,31,.22); stroke: var(--brand); stroke-width: 1.5; }
+.radar { max-width: 300px; display: block; margin: 0 auto; }
+
+/* judges database */
+.jdb-list { display: grid; gap: 12px; }
+@media (min-width: 620px) { .jdb-list { grid-template-columns: 1fr 1fr; } }
+.jdb-card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; box-shadow: var(--shadow); }
+.jdb-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.jdb-head h3 { margin: 0; }
+.jdb-meta { color: var(--muted); font-size: 12px; }
+.jdb-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin: 10px 0; }
+.jdb-stats > div { text-align: center; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+.jdb-stats b { display: block; font-size: 18px; }
+.jdb-stats span { color: var(--muted); font-size: 11px; }
+.jdb-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.tag { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
+.tag.gen { background: #eaf5ee; color: #2e7d47; }
+.tag.harsh { background: #fdecea; color: var(--warn); }
+.tag.steady { background: #e9f0f8; color: #2b5f9e; }
+.tag.swingy { background: #fbf0e5; color: #a35b12; }
+.tag.neu { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.jdb-crit { display: flex; flex-wrap: wrap; gap: 6px; }
+.pcrit { font-size: 12px; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 3px 8px; }
+.pcrit b { color: var(--ink); }
+@media (prefers-color-scheme: dark) {
+  .tag.gen { background: #17321f; } .tag.harsh { background: #3a1b18; }
+  .tag.steady { background: #16283c; } .tag.swingy { background: #33240f; }
+}
 
 /* ---- misc ---- */
 .gate input { max-width: 260px; }
