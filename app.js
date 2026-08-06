@@ -1,5 +1,13 @@
 // app.js — tasteoff SPA: router + Admin / Judge / Results views.
-import { loadEvent, saveEvent, saveEventSafe, watchScores, submitScore } from "./firebase.js";
+import {
+  loadEvent,
+  saveEvent,
+  saveEventSafe,
+  listEvents,
+  deleteEvent,
+  watchScores,
+  submitScore,
+} from "./firebase.js";
 import { computeLeaderboards, SCORE_STEPS } from "./scoring.js";
 import { parseFile, parseGoogleSheet } from "./import-sheet.js";
 
@@ -119,6 +127,52 @@ async function renderAdmin(preloaded) {
   const c = el(`<div class="wrap admin"></div>`);
   c.appendChild(el(`<a class="back" href="#/">← home</a>`));
   c.appendChild(el(`<h2>Event setup</h2>`));
+
+  // --- your events (history / switcher) ---
+  const evListSec = el(`
+    <section class="panel evlist">
+      <div class="phead"><h3>Your events</h3><button class="mini" id="newEv">+ new event</button></div>
+      <div id="evItems" class="evitems"><p class="hint">Loading…</p></div>
+    </section>`);
+  c.appendChild(evListSec);
+  $("#newEv", evListSec).onclick = () => {
+    beginRender();
+    renderAdmin(blankEvent("event-" + uid().slice(0, 5)));
+  };
+  listEvents().then((list) => {
+    const box = $("#evItems", evListSec);
+    if (!document.body.contains(box)) return;
+    box.replaceChildren();
+    if (!list.length) {
+      box.appendChild(el(`<p class="hint">No saved events yet. Import a spreadsheet below, or start a new one.</p>`));
+      return;
+    }
+    list.forEach((r) => {
+      const isCur = r.id === ev.id;
+      const row = el(`
+        <div class="evrow${isCur ? " cur" : ""}">
+          <button class="evopen">
+            <span class="evname">${esc(r.name)}${isCur ? " ·  current" : ""}</span>
+            <span class="evmeta">${r.teamCount} teams · ${r.judgeCount} judges${
+        r.updatedAt ? " · " + fmtDate(r.updatedAt) : ""
+      }</span>
+          </button>
+          <button class="evdel" title="delete">✕</button>
+        </div>`);
+      row.querySelector(".evopen").onclick = () => {
+        LS.setActiveEvent(r.id);
+        beginRender();
+        renderAdmin();
+      };
+      row.querySelector(".evdel").onclick = async () => {
+        if (!confirm(`Delete "${r.name}"? This removes the event config (submitted scores stay in the database).`)) return;
+        await deleteEvent(r.id);
+        beginRender();
+        renderAdmin(r.id === ev.id ? blankEvent("event-" + uid().slice(0, 5)) : undefined);
+      };
+      box.appendChild(row);
+    });
+  });
 
   // --- import from a spreadsheet (Google Sheet URL or uploaded file) ---
   const importSec = el(`
@@ -794,6 +848,13 @@ function blankEvent(id) {
     adminPasscode: "",
     resultsPasscode: "",
   };
+}
+
+function fmtDate(ts) {
+  const ms = ts && ts.seconds ? ts.seconds * 1000 : null;
+  if (!ms) return "";
+  const d = new Date(ms);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function addMinutes(hhmm, mins) {

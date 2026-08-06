@@ -17,7 +17,9 @@ import {
   persistentMultipleTabManager,
   doc,
   getDoc,
+  getDocs,
   setDoc,
+  deleteDoc,
   collection,
   onSnapshot,
   query,
@@ -132,6 +134,42 @@ export function watchEvent(eventId, cb) {
   return onSnapshot(eventRef(eventId), (snap) => {
     cb(snap.exists() ? { id: snap.id, ...snap.data() } : null);
   });
+}
+
+function tsMs(ts) {
+  return ts && ts.seconds ? ts.seconds * 1000 : 0;
+}
+
+// List saved events for the admin history (newest first). System docs (id
+// starting with "_") are hidden. Returns [] if Firebase isn't reachable.
+export async function listEvents() {
+  try {
+    await withTimeout(authReady, 4000, null);
+    const snap = await withTimeout(getDocs(collection(db, "events")), 5000, null);
+    if (!snap) return [];
+    const rows = [];
+    snap.forEach((d) => {
+      if (d.id.startsWith("_")) return;
+      const x = d.data();
+      rows.push({
+        id: d.id,
+        name: x.name || d.id,
+        teamCount: (x.teams || []).length,
+        judgeCount: (x.judges || []).length,
+        updatedAt: x.updatedAt || null,
+      });
+    });
+    rows.sort((a, b) => tsMs(b.updatedAt) - tsMs(a.updatedAt));
+    return rows;
+  } catch (err) {
+    console.warn("listEvents failed:", err?.code || err);
+    return [];
+  }
+}
+
+export async function deleteEvent(eventId) {
+  await authReady;
+  await deleteDoc(eventRef(eventId));
 }
 
 export function scoreId(judgeId, teamCode) {

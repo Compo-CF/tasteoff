@@ -101,6 +101,15 @@ input, select {
 .jbar .whoj { color: var(--muted); font-size: 13px; }
 .dishdesc { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; font-size: 15px; }
 
+.evlist { border-left: 4px solid var(--brand); }
+.evitems { display: grid; gap: 8px; }
+.evrow { display: flex; gap: 8px; align-items: stretch; }
+.evrow .evopen { flex: 1; text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; color: var(--ink); display: flex; flex-direction: column; gap: 2px; }
+.evrow.cur .evopen { border-color: var(--brand); box-shadow: 0 0 0 2px rgba(181,54,31,.12); }
+.evrow .evname { font-weight: 700; }
+.evrow .evmeta { color: var(--muted); font-size: 12px; }
+.evrow .evdel { background: transparent; border: 1px solid var(--line); border-radius: 10px; color: var(--warn); width: 40px; }
+
 .import { border-left: 4px solid var(--brand-2); }
 .import .or { text-align: center; color: var(--muted); font-size: 12px; margin: 4px 0 10px; }
 .import input[type="file"] { padding: 8px; }
