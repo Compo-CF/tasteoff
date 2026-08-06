@@ -208,6 +208,39 @@ export async function listRoster() {
   }
 }
 
+// ---- Event-type templates (top-level `templates` collection) --------------
+export async function listTemplates() {
+  try {
+    await withTimeout(authReady, 4000, null);
+    const snap = await withTimeout(getDocs(collection(db, "templates")), 5000, null);
+    if (!snap) return [];
+    const rows = [];
+    snap.forEach((d) => rows.push({ id: d.id, ...d.data(), _user: true }));
+    return rows.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  } catch (err) {
+    console.warn("listTemplates failed:", err?.code || err);
+    return [];
+  }
+}
+
+export async function saveTemplate(tpl) {
+  await authReady;
+  const id = tpl.id || "t_" + String(tpl.name || "type").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+  await setDoc(doc(db, "templates", id), {
+    name: tpl.name,
+    category: tpl.category || "Custom",
+    criteria: tpl.criteria || [],
+    schedule: tpl.schedule || null,
+    updatedAt: serverTimestamp(),
+  });
+  return id;
+}
+
+export async function deleteTemplate(id) {
+  await authReady;
+  await deleteDoc(doc(db, "templates", id));
+}
+
 export async function getEventScoresOnce(eventId) {
   await authReady;
   const snap = await getDocs(collection(db, "events", eventId, "scores"));

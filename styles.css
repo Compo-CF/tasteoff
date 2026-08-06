@@ -111,6 +111,10 @@ input, select {
 .evrow .evmeta { color: var(--muted); font-size: 12px; }
 .evrow .evdel { background: transparent; border: 1px solid var(--line); border-radius: 10px; color: var(--warn); width: 40px; }
 
+.evtype { border-left: 4px solid #6a5acd; }
+.evtype .typeactions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.evtype select { margin: 0; }
+
 .import { border-left: 4px solid var(--brand-2); }
 .import .or { text-align: center; color: var(--muted); font-size: 12px; margin: 4px 0 10px; }
 .import input[type="file"] { padding: 8px; }

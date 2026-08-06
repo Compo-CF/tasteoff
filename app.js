@@ -11,7 +11,11 @@ import {
   listRoster,
   loadAllEventsWithScores,
   getDemoData,
+  listTemplates,
+  saveTemplate,
+  deleteTemplate,
 } from "./firebase.js";
+import { BUILTIN_TEMPLATES, templateCriteria } from "./templates.js";
 import { computeLeaderboards, SCORE_STEPS } from "./scoring.js";
 import { parseFile, parseGoogleSheet } from "./import-sheet.js";
 import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles } from "./analytics.js";
@@ -267,6 +271,89 @@ async function renderAdmin(preloaded) {
       </div>
     </section>`);
   c.appendChild(meta);
+
+  // --- event type / template ---
+  const typeSec = el(`
+    <section class="panel evtype">
+      <div class="phead"><h3>Event type</h3></div>
+      <p class="hint">Load a preset's criteria &amp; weights, or save your current criteria as a reusable type for next time.</p>
+      <div class="row">
+        <select id="tplSel" style="flex:1"></select>
+        <button class="mini" id="tplApply">Load</button>
+      </div>
+      <div class="typeactions">
+        <button class="mini" id="tplSave">Save current as type…</button>
+        <button class="mini" id="tplDel">Delete selected</button>
+      </div>
+      <div id="tplNote" class="hint"></div>
+    </section>`);
+  c.appendChild(typeSec);
+
+  let allTemplates = BUILTIN_TEMPLATES.map((t) => ({ ...t }));
+  function fillTpl() {
+    const sel = $("#tplSel", typeSec);
+    sel.replaceChildren();
+    const og1 = document.createElement("optgroup");
+    og1.label = "Built-in";
+    const og2 = document.createElement("optgroup");
+    og2.label = "Your saved types";
+    allTemplates.forEach((t, i) => {
+      const o = el(`<option value="${i}">${esc(t.name)}${t.category ? " · " + esc(t.category) : ""}</option>`);
+      (t._user ? og2 : og1).appendChild(o);
+    });
+    sel.appendChild(og1);
+    if (og2.children.length) sel.appendChild(og2);
+    const cur = allTemplates[+sel.value] || allTemplates[0];
+    $("#tplNote", typeSec).textContent = cur ? cur.note || "" : "";
+  }
+  fillTpl();
+  listTemplates().then((us) => {
+    if (!document.body.contains(typeSec)) return;
+    allTemplates = [...BUILTIN_TEMPLATES.map((t) => ({ ...t })), ...us];
+    fillTpl();
+  });
+  $("#tplSel", typeSec).onchange = () => {
+    const t = allTemplates[+$("#tplSel", typeSec).value];
+    $("#tplNote", typeSec).textContent = t ? t.note || "" : "";
+  };
+  $("#tplApply", typeSec).onclick = () => {
+    const t = allTemplates[+$("#tplSel", typeSec).value];
+    if (!t) return;
+    readCrit();
+    if (ev.criteria.length && !confirm(`Replace the current ${ev.criteria.length} criteria with "${t.name}"?`)) return;
+    ev.criteria = templateCriteria(t, uid);
+    drawCrit();
+    if (t.schedule && t.schedule.intervalMin) $("#a_int").value = t.schedule.intervalMin;
+    toast(`Loaded "${t.name}"`);
+  };
+  $("#tplSave", typeSec).onclick = async () => {
+    readCrit();
+    if (!ev.criteria.length) {
+      alert("Add or load criteria first.");
+      return;
+    }
+    const name = prompt("Name this event type:", ev.name || "");
+    if (!name) return;
+    const crit = ev.criteria.map((c) => ({ name: c.name, shortName: c.shortName, weight: c.weight, low: c.low, high: c.high }));
+    await saveTemplate({ name, category: "Custom", criteria: crit, schedule: { intervalMin: parseInt($("#a_int").value) || 5 } });
+    const us = await listTemplates();
+    allTemplates = [...BUILTIN_TEMPLATES.map((t) => ({ ...t })), ...us];
+    fillTpl();
+    toast("Saved event type ✓");
+  };
+  $("#tplDel", typeSec).onclick = async () => {
+    const t = allTemplates[+$("#tplSel", typeSec).value];
+    if (!t || !t._user) {
+      alert("Only your saved types can be deleted (built-ins are permanent).");
+      return;
+    }
+    if (!confirm(`Delete event type "${t.name}"?`)) return;
+    await deleteTemplate(t.id);
+    const us = await listTemplates();
+    allTemplates = [...BUILTIN_TEMPLATES.map((x) => ({ ...x })), ...us];
+    fillTpl();
+    toast("Deleted");
+  };
 
   // --- criteria ---
   const critSec = el(`<section class="panel"><div class="phead"><h3>Criteria &amp; weights</h3><button class="mini" id="addCrit">+ add</button></div><div id="critList"></div><div class="wtotal" id="wtotal"></div></section>`);
