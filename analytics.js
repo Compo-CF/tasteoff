@@ -216,6 +216,55 @@ export function restaurantHistory(events, scoresByEvent) {
     .sort((a, b) => b.wins - a.wins || a.avgPlace - b.avgPlace || b.appearances - a.appearances);
 }
 
+// Deep profile for one participant across all events they entered.
+export function participantProfile(events, scoresByEvent, name) {
+  // global judge means (for affinity: does a judge score this participant above their own norm?)
+  const judgeAll = {};
+  for (const ev of events) {
+    for (const s of scoresByEvent[ev.id] || []) {
+      (judgeAll[s.judgeId] = judgeAll[s.judgeId] || []).push(...Object.values(s.criterionScores || {}));
+    }
+  }
+  const judgeMean = Object.fromEntries(Object.entries(judgeAll).map(([k, v]) => [k, mean(v)]));
+
+  const critAgg = {};
+  const perJudge = {};
+  const appearances = [];
+  for (const ev of events) {
+    const team = (ev.teams || []).find((t) => (t.name || t.code) === name);
+    if (!team) continue;
+    const evScores = scoresByEvent[ev.id] || [];
+    const mine = evScores.filter((s) => s.teamCode === team.code);
+    if (!mine.length) continue;
+    const { scaled } = computeLeaderboards(ev.criteria || [], ev.teams || [], evScores);
+    const row = scaled.find((r) => r.code === team.code) || {};
+    const critName = Object.fromEntries((ev.criteria || []).map((c) => [c.id, c.shortName || c.name]));
+    const nameOf = Object.fromEntries((ev.judges || []).map((j) => [j.id, j.name]));
+    appearances.push({
+      event: ev.name || ev.id,
+      place: row.place,
+      field: scaled.filter((r) => r.scaled > 0).length,
+      score: round2((row.scaled || 0) / Math.max(1, row.judgeCount)),
+    });
+    for (const s of mine) {
+      for (const [cid, v] of Object.entries(s.criterionScores || {})) {
+        const cn = critName[cid] || cid;
+        (critAgg[cn] = critAgg[cn] || []).push(v);
+      }
+      (perJudge[s.judgeId] = perJudge[s.judgeId] || { name: nameOf[s.judgeId] || s.judgeId, vals: [] }).vals.push(
+        ...Object.values(s.criterionScores || {})
+      );
+    }
+  }
+  const facets = Object.entries(critAgg)
+    .map(([k, v]) => ({ short: k, value: round2(mean(v)) }))
+    .sort((a, b) => b.value - a.value);
+  const affinity = Object.entries(perJudge)
+    .map(([jid, o]) => ({ judge: o.name, avg: round2(mean(o.vals)), delta: round2(mean(o.vals) - (judgeMean[jid] || 0)) }))
+    .sort((a, b) => b.delta - a.delta);
+  return { name, appearances, facets, best: facets[0] || null, worst: facets[facets.length - 1] || null, affinity };
+}
+
 // ---- Cross-event judge database -------------------------------------------
 // events: [{id, name, criteria, teams}]  scoresByEvent: {eventId: [score,...]}
 // Returns per-judge learned profile aggregated across every event they judged.

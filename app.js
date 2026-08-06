@@ -20,7 +20,7 @@ import {
 import { BUILTIN_TEMPLATES, templateCriteria } from "./templates.js";
 import { computeLeaderboards, SCORE_STEPS } from "./scoring.js";
 import { parseFile, parseGoogleSheet, workbookToTemplates } from "./import-sheet.js";
-import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles, eventsOverview, restaurantHistory } from "./analytics.js";
+import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles, eventsOverview, restaurantHistory, participantProfile } from "./analytics.js";
 import { barChart, divergingChart, histogram, radar } from "./charts.js";
 
 // stable judge id from a name, so the same person links across events
@@ -1430,7 +1430,7 @@ async function renderHistory() {
     <p class="sub">${hist.length} events · ${restaurants.length} restaurants · ${totalBallots} ballots. <a href="#/judges">Judge database →</a></p>
     <div class="rcontrols"><div class="tabs">
       <button class="tab active" data-tab="events">Events</button>
-      <button class="tab" data-tab="restaurants">Restaurants</button>
+      <button class="tab" data-tab="restaurants">Participants</button>
     </div></div>
     <div id="hhost"></div>
   </div>`);
@@ -1465,7 +1465,7 @@ async function renderHistory() {
     } else {
       const rows = restaurants
         .map(
-          (r, i) => `<tr>
+          (r, i) => `<tr class="clickrow" data-name="${esc(r.name)}">
             <td class="pl">${i + 1}</td>
             <td>${esc(r.name)}</td>
             <td class="tb">${r.appearances}</td>
@@ -1477,14 +1477,43 @@ async function renderHistory() {
           </tr>`
         )
         .join("");
-      host.replaceChildren(
-        el(`<div class="board"><table>
-          <thead><tr><th>#</th><th>Restaurant</th><th>Apps</th><th>Wins</th><th>Top 3</th><th>Best</th><th>Avg place</th><th>Avg score</th></tr></thead>
+      const node = el(`<div>
+        <div class="board"><table>
+          <thead><tr><th>#</th><th>Participant</th><th>Apps</th><th>Wins</th><th>Top 3</th><th>Best</th><th>Avg place</th><th>Avg score</th></tr></thead>
           <tbody>${rows}</tbody></table></div>
-          <p class="tienote">“Apps” = events entered · “Avg score” = average points per judge (0–36), comparable across events.</p>`)
-      );
+          <p class="tienote">Tap a participant for their profile · “Apps” = events entered · “Avg score” = points per judge (0–36), comparable across events.</p>
+        </div>`);
+      node.querySelectorAll(".clickrow").forEach((tr) => {
+        tr.onclick = () => showParticipant(tr.dataset.name);
+      });
+      host.replaceChildren(node);
     }
   }
+
+  function showParticipant(name) {
+    const p = participantProfile(hist, scoresByEvent, name);
+    const track = p.appearances
+      .map((a) => `<tr><td>${esc(a.event)}</td><td class="tb">${a.place ? ordinal(a.place) + " / " + a.field : "–"}</td><td class="sc">${a.score}</td></tr>`)
+      .join("");
+    const aff = p.affinity;
+    const favor = aff.slice(0, 3).filter((a) => a.delta > 0.15);
+    const tough = aff.slice(-3).reverse().filter((a) => a.delta < -0.15);
+    const rdr = radar(p.facets.map((f) => ({ short: f.short, value: f.value })), { max: 5 });
+    const facetBars = barChart(p.facets.map((f) => ({ label: f.short, value: f.value })), { max: 5 });
+    const ov = el(`<div class="modal-ov"><div class="modal wide">
+      <div class="dd-head"><h3>${esc(name)}</h3><button class="mini" id="pClose">close</button></div>
+      <p class="sub">${p.appearances.length} event(s) · best facet <b>${p.best ? esc(p.best.short) : "–"}</b>${p.worst && p.worst !== p.best ? ` · weakest <b>${esc(p.worst.short)}</b>` : ""}</p>
+      <div class="dd-cols"><div class="dd-radar">${rdr}</div><div class="dd-bars">${facetBars}</div></div>
+      <h4>Track record</h4>
+      <table class="dd-judges"><thead><tr><th>Event</th><th>Finish</th><th>Score</th></tr></thead><tbody>${track}</tbody></table>
+      <h4>Judge affinity</h4>
+      <p class="hint">${favor.length ? "Scored highest by: " + favor.map((a) => `${esc(a.judge)} (+${a.delta})`).join(", ") : "No strong high-scorers."}${tough.length ? " · Toughest: " + tough.map((a) => `${esc(a.judge)} (${a.delta})`).join(", ") : ""}</p>
+    </div></div>`);
+    $("#pClose", ov).onclick = () => ov.remove();
+    ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+    document.body.appendChild(ov);
+  }
+
   draw();
   app().replaceChildren(c);
 }

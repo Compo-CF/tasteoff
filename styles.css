@@ -290,7 +290,11 @@ input, select {
 .empty { color: var(--muted); padding: 20px 0; }
 /* reconcile modal */
 .modal-ov { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 100; }
-.modal { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; max-width: 460px; width: 100%; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,.3); }
+.modal { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; max-width: 460px; width: 100%; max-height: 85vh; overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,.3); }
+.modal.wide { max-width: 620px; }
+.modal h4 { margin: 14px 0 6px; }
+.clickrow { cursor: pointer; }
+.clickrow:hover td { background: rgba(181,54,31,.08); }
 .modal h3 { margin: 0 0 4px; }
 .modal .sub { font-size: 13px; margin: 0 0 12px; }
 .rec-list { display: grid; gap: 8px; }
