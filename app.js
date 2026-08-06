@@ -19,7 +19,7 @@ import {
 } from "./firebase.js";
 import { BUILTIN_TEMPLATES, templateCriteria } from "./templates.js";
 import { computeLeaderboards, SCORE_STEPS } from "./scoring.js";
-import { parseFile, parseGoogleSheet } from "./import-sheet.js";
+import { parseFile, parseGoogleSheet, workbookToTemplates } from "./import-sheet.js";
 import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles } from "./analytics.js";
 import { barChart, divergingChart, histogram, radar } from "./charts.js";
 
@@ -310,6 +310,11 @@ async function renderAdmin(preloaded) {
         <button class="mini" id="tplDel">Delete selected</button>
       </div>
       <div id="tplNote" class="hint"></div>
+      <div class="typeimport">
+        <label>Bulk-import types <input id="tplFile" type="file" accept=".xlsx,.xls,.csv"></label>
+        <a href="TasteOff-EventTypes-Template.xlsx" download>types template</a>
+      </div>
+      <div id="tplImportMsg" class="importmsg"></div>
     </section>`);
   c.appendChild(typeSec);
 
@@ -378,9 +383,32 @@ async function renderAdmin(preloaded) {
     fillTpl();
     toast("Deleted");
   };
+  $("#tplFile", typeSec).onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const msg = $("#tplImportMsg", typeSec);
+    msg.textContent = "Reading types…";
+    msg.className = "importmsg";
+    try {
+      const wb = window.XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const types = workbookToTemplates(wb).filter((t) => t.criteria.length);
+      if (!types.length) throw new Error("No event types found — check the template format.");
+      for (const t of types) await saveTemplate(t);
+      const us = await listTemplates();
+      allTemplates = [...BUILTIN_TEMPLATES.map((x) => ({ ...x })), ...us];
+      fillTpl();
+      msg.textContent = `Imported ${types.length} event type(s): ${types.map((t) => t.name).join(", ")}`;
+      toast(`Imported ${types.length} type(s) ✓`);
+    } catch (err) {
+      msg.textContent = err.message || String(err);
+      msg.className = "importmsg err";
+    }
+  };
 
   // --- criteria ---
-  const critSec = el(`<section class="panel"><div class="phead"><h3>Criteria &amp; weights</h3><button class="mini" id="addCrit">+ add</button></div><div id="critList"></div><div class="wtotal" id="wtotal"></div></section>`);
+  const critSec = el(`<section class="panel"><div class="phead"><h3>Criteria &amp; weights</h3><button class="mini" id="addCrit">+ add</button></div>
+    <div class="crow crow-head"><span>Category</span><span>Weight</span><span>Low Note</span><span>High Note</span><span></span></div>
+    <div id="critList"></div><div class="wtotal" id="wtotal"></div></section>`);
   c.appendChild(critSec);
   const critList = $("#critList", critSec);
   function drawCrit() {
@@ -388,12 +416,12 @@ async function renderAdmin(preloaded) {
     ev.criteria.forEach((cr, i) => {
       const row = el(`
         <div class="crow" data-i="${i}">
-          <input class="cn" placeholder="Criterion (e.g. Flavor)" value="${esc(cr.name)}">
+          <input class="cn" placeholder="Category (e.g. Flavor)" value="${esc(cr.name)}">
           <input class="cw" type="number" min="0" step="1" placeholder="%" value="${Math.round(
             (cr.weight || 0) * 100
           )}">
-          <input class="cl" placeholder="Low descriptor" value="${esc(cr.low || "")}">
-          <input class="ch" placeholder="High descriptor" value="${esc(cr.high || "")}">
+          <input class="cl" placeholder="Low Note" value="${esc(cr.low || "")}">
+          <input class="ch" placeholder="High Note" value="${esc(cr.high || "")}">
           <button class="del" title="remove">✕</button>
         </div>`);
       row.querySelector(".del").onclick = () => {

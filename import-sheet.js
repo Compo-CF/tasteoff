@@ -171,6 +171,46 @@ export function workbookToEvent(wb) {
   };
 }
 
+// ---- Event-type library import -------------------------------------------
+// Long format: one row per criterion, grouped by "Event Type".
+// Columns: Event Type | Category | Note | Criterion | Short | Weight % | Low | High
+function findTypesSheet(wb) {
+  const names = wb.SheetNames;
+  const pref = names.find((n) => ["types", "event types", "templates", "type"].includes(n.trim().toLowerCase()));
+  if (pref) return wb.Sheets[pref];
+  for (const n of names) {
+    const r = rows(wb.Sheets[n])[0];
+    if (r && ("event type" in r || "type" in r || "type name" in r)) return wb.Sheets[n];
+  }
+  return wb.Sheets[names[0]];
+}
+
+export function workbookToTemplates(wb) {
+  const rs = rows(findTypesSheet(wb));
+  const groups = new Map(); // preserves insertion order
+  for (const r of rs) {
+    const tname = String(pick(r, "event type", "type", "type name")).trim();
+    const cname = pick(r, "criterion", "name", "criteria");
+    if (!tname || !cname) continue;
+    if (!groups.has(tname)) {
+      groups.set(tname, { name: tname, category: pick(r, "category") || "Custom", note: pick(r, "note") || "", criteria: [] });
+    }
+    const g = groups.get(tname);
+    if ((!g.category || g.category === "Custom") && pick(r, "category")) g.category = pick(r, "category");
+    if (!g.note && pick(r, "note")) g.note = pick(r, "note");
+    let w = parseFloat(pick(r, "weight %", "weight", "weight%")) || 0;
+    if (w > 1) w = w / 100;
+    g.criteria.push({
+      name: cname,
+      shortName: pick(r, "short", "short name") || cname,
+      weight: w,
+      low: pick(r, "low", "low descrip", "low descriptor"),
+      high: pick(r, "high", "high descrip", "high descriptor"),
+    });
+  }
+  return [...groups.values()];
+}
+
 export async function parseFile(file) {
   const buf = await file.arrayBuffer();
   const wb = window.XLSX.read(buf, { type: "array" });

@@ -79,6 +79,9 @@ input, select {
 .trow { grid-template-columns: 70px 1fr 52px 52px 90px 32px; }
 .crow input, .jrow input, .trow input, .jrow select, .trow select { margin-top: 0; }
 .trow .tdd { grid-column: 1 / -1; }
+.crow-head { margin-bottom: 4px; }
+.crow-head span { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; padding-left: 2px; }
+@media (max-width: 560px) { .crow-head { display: none; } }
 .del { background: transparent; border: none; color: var(--warn); font-size: 16px; }
 @media (max-width: 560px) {
   .crow, .trow { grid-template-columns: 1fr 1fr; }
@@ -115,17 +118,16 @@ input, select {
 .awards .chk { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
 .awards .chk input { width: auto; margin: 0; }
 
-/* winners banner */
-.winners { display: grid; gap: 12px; margin-bottom: 14px; }
-@media (min-width: 620px) { .winners { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); } }
-.wcard { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow); }
-.wcard h4 { margin: 0 0 8px; font-size: 14px; }
+/* winners banner — three stacked cards */
+.winners { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.wcard { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 16px; box-shadow: var(--shadow); }
+.wcard h4 { margin: 0 0 6px; font-size: 14px; display: flex; align-items: baseline; gap: 6px; }
 .wcard h4 small { color: var(--muted); font-weight: 500; }
 .wcard.peoples { border-color: #c9a227; }
-.wcard ol { margin: 0; padding: 0; list-style: none; }
-.wcard li { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 14px; }
+.wcard ol { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px 22px; }
+.wcard li { display: flex; align-items: baseline; gap: 8px; padding: 2px 0; font-size: 14px; }
 .wcard li .pl { font-weight: 800; color: var(--brand-2); white-space: nowrap; min-width: 62px; }
-.wcard li .sc { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.wcard li .sc { color: var(--muted); font-variant-numeric: tabular-nums; }
 .wcard li.none { color: var(--muted); font-style: italic; }
 
 /* people's choice tally */
@@ -144,6 +146,9 @@ input, select {
 .pc-in { margin: 0; text-align: right; }
 .evtype .typeactions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .evtype select { margin: 0; }
+.evtype .typeimport { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.evtype .typeimport label { margin: 0; flex: 1; min-width: 200px; }
+.evtype .typeimport input[type="file"] { padding: 6px; }
 
 .import { border-left: 4px solid var(--brand-2); }
 .import .or { text-align: center; color: var(--muted); font-size: 12px; margin: 4px 0 10px; }
