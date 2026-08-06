@@ -74,7 +74,7 @@ input, select {
 .actions { display: flex; gap: 10px; margin: 8px 0; }
 
 .crow, .jrow, .trow { display: grid; gap: 6px; align-items: center; margin-bottom: 8px; }
-.crow { grid-template-columns: 1.3fr 0.8fr 60px 1.2fr 1.2fr 32px; }
+.crow { grid-template-columns: 1.4fr 60px 1.3fr 1.3fr 32px; }
 .jrow { grid-template-columns: 1fr 110px 32px; }
 .trow { grid-template-columns: 70px 1fr 52px 52px 90px 32px; }
 .crow input, .jrow input, .trow input, .jrow select, .trow select { margin-top: 0; }
@@ -111,7 +111,37 @@ input, select {
 .evrow .evmeta { color: var(--muted); font-size: 12px; }
 .evrow .evdel { background: transparent; border: 1px solid var(--line); border-radius: 10px; color: var(--warn); width: 40px; }
 
-.evtype { border-left: 4px solid #6a5acd; }
+.awards { border-left: 4px solid #c9a227; }
+.awards .chk { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+.awards .chk input { width: auto; margin: 0; }
+
+/* winners banner */
+.winners { display: grid; gap: 12px; margin-bottom: 14px; }
+@media (min-width: 620px) { .winners { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); } }
+.wcard { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow); }
+.wcard h4 { margin: 0 0 8px; font-size: 14px; }
+.wcard h4 small { color: var(--muted); font-weight: 500; }
+.wcard.peoples { border-color: #c9a227; }
+.wcard ol { margin: 0; padding: 0; list-style: none; }
+.wcard li { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 14px; }
+.wcard li .pl { font-weight: 800; width: 20px; color: var(--brand-2); }
+.wcard li .sc { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.wcard li.none { color: var(--muted); font-style: italic; }
+
+/* people's choice tally */
+.pc-head h3 { margin: 0 0 2px; }
+.pc-rank { background: var(--card); border: 1px solid #c9a227; border-radius: 14px; padding: 12px 14px; margin: 10px 0 14px; box-shadow: var(--shadow); }
+.pc-total { font-weight: 700; margin-bottom: 6px; }
+.pc-winners { margin: 0; padding: 0; list-style: none; }
+.pc-winners li { display: flex; gap: 8px; padding: 3px 0; }
+.pc-winners li .pl { font-weight: 800; color: var(--brand-2); width: 20px; }
+.pc-winners li b { margin-left: auto; }
+.pc-winners li.none { color: var(--muted); font-style: italic; }
+.pc-grid { display: grid; gap: 6px; }
+.pc-row { display: grid; grid-template-columns: 60px 1fr 90px; gap: 8px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
+.pc-code { font-weight: 700; color: var(--brand); }
+.pc-name { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-in { margin: 0; text-align: right; }
 .evtype .typeactions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .evtype select { margin: 0; }
 

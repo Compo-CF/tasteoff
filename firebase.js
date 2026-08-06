@@ -66,6 +66,41 @@ export const authReady = new Promise((resolve) => {
   });
 });
 
+// ---- People's Choice tally (coins/votes per team) -------------------------
+// Stored at events/{id}/tally/peoples -> { counts: {teamCode: n} }.
+const demoPeoples = { counts: {} };
+const demoPeoplesSubs = new Set();
+function demoPeoplesNotify() {
+  demoPeoplesSubs.forEach((cb) => cb({ ...demoPeoples.counts }));
+}
+
+export function watchPeoples(eventId, cb) {
+  if (isDemo(eventId)) {
+    demoPeoplesSubs.add(cb);
+    cb({ ...demoPeoples.counts });
+    return () => demoPeoplesSubs.delete(cb);
+  }
+  return onSnapshot(doc(db, "events", eventId, "tally", "peoples"), (snap) => {
+    const d = snap.exists() ? snap.data() : {};
+    cb(d.counts || {});
+  });
+}
+
+export async function savePeoplesCount(eventId, teamCode, count) {
+  if (isDemo(eventId)) {
+    demoPeoples.counts[teamCode] = count;
+    demoPeoplesNotify();
+    return;
+  }
+  await authReady;
+  // merge writes the single team's count without clobbering the others
+  setDoc(
+    doc(db, "events", eventId, "tally", "peoples"),
+    { counts: { [teamCode]: count }, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+}
+
 // ---- Data model ---------------------------------------------------------
 // events/{eventId}                         -> event config (criteria, judges, teams, schedule, passcodes)
 // events/{eventId}/scores/{judgeId__code}  -> one judge's scores for one dish

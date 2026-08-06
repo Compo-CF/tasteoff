@@ -7,6 +7,8 @@ import {
   deleteEvent,
   watchScores,
   submitScore,
+  watchPeoples,
+  savePeoplesCount,
   upsertJudges,
   listRoster,
   loadAllEventsWithScores,
@@ -272,6 +274,23 @@ async function renderAdmin(preloaded) {
     </section>`);
   c.appendChild(meta);
 
+  // --- awards (Judges' Choice + optional People's Choice) ---
+  const aw = eventAwards(ev);
+  const awardsSec = el(`
+    <section class="panel awards">
+      <div class="phead"><h3>Awards</h3></div>
+      <label>Judges' Choice — top <input id="aw_jtop" type="number" min="1" value="${aw.judgesTopN}" style="width:64px"> place(s)</label>
+      <label class="chk"><input type="checkbox" id="aw_pc"${aw.peoples.enabled ? " checked" : ""}> Add a <b>People's Choice</b> award (coin/vote count per team)</label>
+      <div class="row" id="aw_pcopts">
+        <label>Unit label <input id="aw_unit" value="${esc(aw.peoples.unit)}"></label>
+        <label>Top <input id="aw_ptop" type="number" min="1" value="${aw.peoples.topN}" style="width:64px"></label>
+      </div>
+    </section>`);
+  c.appendChild(awardsSec);
+  const syncPc = () => ($("#aw_pcopts", awardsSec).style.display = $("#aw_pc", awardsSec).checked ? "flex" : "none");
+  $("#aw_pc", awardsSec).onchange = syncPc;
+  syncPc();
+
   // --- event type / template ---
   const typeSec = el(`
     <section class="panel evtype">
@@ -365,7 +384,6 @@ async function renderAdmin(preloaded) {
       const row = el(`
         <div class="crow" data-i="${i}">
           <input class="cn" placeholder="Criterion (e.g. Flavor)" value="${esc(cr.name)}">
-          <input class="cs" placeholder="Short" value="${esc(cr.shortName || "")}">
           <input class="cw" type="number" min="0" step="1" placeholder="%" value="${Math.round(
             (cr.weight || 0) * 100
           )}">
@@ -382,14 +400,22 @@ async function renderAdmin(preloaded) {
     updateWTotal();
   }
   function readCrit() {
-    ev.criteria = [...critList.querySelectorAll(".crow")].map((r) => ({
-      id: ev.criteria[+r.dataset.i]?.id || uid("c"),
-      name: r.querySelector(".cn").value.trim(),
-      shortName: r.querySelector(".cs").value.trim(),
-      weight: (parseFloat(r.querySelector(".cw").value) || 0) / 100,
-      low: r.querySelector(".cl").value.trim(),
-      high: r.querySelector(".ch").value.trim(),
-    }));
+    ev.criteria = [...critList.querySelectorAll(".crow")].map((r) => {
+      const prev = ev.criteria[+r.dataset.i] || {};
+      const name = r.querySelector(".cn").value.trim();
+      // Short label is derived automatically now (no separate column). Keep an
+      // existing short name (from a template/import) if it still fits the name,
+      // otherwise fall back to the full name for chart labels.
+      const shortName = prev.shortName && name.includes(prev.shortName) ? prev.shortName : name;
+      return {
+        id: prev.id || uid("c"),
+        name,
+        shortName,
+        weight: (parseFloat(r.querySelector(".cw").value) || 0) / 100,
+        low: r.querySelector(".cl").value.trim(),
+        high: r.querySelector(".ch").value.trim(),
+      };
+    });
   }
   function updateWTotal() {
     const rows = [...critList.querySelectorAll(".cw")];
@@ -518,6 +544,14 @@ async function renderAdmin(preloaded) {
     };
     ev.adminPasscode = $("#a_apass").value.trim();
     ev.resultsPasscode = $("#a_rpass").value.trim();
+    ev.awards = {
+      judgesTopN: parseInt($("#aw_jtop").value) || 3,
+      peoples: {
+        enabled: $("#aw_pc").checked,
+        unit: $("#aw_unit").value.trim() || "Coins",
+        topN: parseInt($("#aw_ptop").value) || 2,
+      },
+    };
   }
 
   // --- save + links ---
@@ -841,8 +875,12 @@ async function renderResults() {
   c.appendChild(el(`<div class="jbar"><a class="back" href="#/">←</a><div class="who">${esc(
     ev.name || "Results"
   )}</div><button class="mini" id="csv">export CSV</button></div>`));
+  const aw = eventAwards(ev);
+  const pcTab = aw.peoples.enabled
+    ? `<button class="tab" data-tab="peoples">People's Choice</button>`
+    : "";
   const controls = el(`<div class="rcontrols">
-      <div class="tabs"><button class="tab active" data-tab="board">Leaderboard</button><button class="tab" data-tab="analytics">Analytics</button></div>
+      <div class="tabs"><button class="tab active" data-tab="board">Leaderboard</button><button class="tab" data-tab="analytics">Analytics</button>${pcTab}</div>
       <label class="reveal"><input type="checkbox" id="reveal"> reveal team names</label>
       <span class="prog" id="prog"></span>
     </div>`);
@@ -866,28 +904,134 @@ async function renderResults() {
   });
 
   let latestScores = [];
+  let latestPeoples = {};
   watchScores(eventId, (rows) => {
     latestScores = rows;
     draw();
   });
+  if (aw.peoples.enabled) {
+    watchPeoples(eventId, (counts) => {
+      latestPeoples = counts || {};
+      // Only re-render live if we're not the one typing (peoples tab handles its own inputs)
+      if (tab !== "peoples") draw();
+      else updatePeoplesRanking();
+    });
+  }
+
+  let updatePeoplesRanking = () => {};
 
   function draw() {
     $("#prog", c).textContent = `${latestScores.length} score sheets in · ${ev.teams.length} dishes`;
     if (tab === "board") {
       const { scaled, minmax } = computeLeaderboards(ev.criteria, ev.teams, latestScores);
       host.replaceChildren(
-        el(`<div class="boards">
-          ${board("Scaled (all judges)", scaled, reveal)}
-          ${board("Min-Max (drop hi/low)", minmax, reveal)}
-        </div>
-        <p class="tienote">△ = position decided by tiebreaker (equal totals, broken by criterion priority).</p>`)
+        el(`<div>
+          ${winnersSummary(ev, scaled, minmax, latestPeoples, aw, reveal)}
+          <div class="boards">
+            ${board("Scaled (all judges)", scaled, reveal)}
+            ${board("Min-Max (drop hi/low)", minmax, reveal)}
+          </div>
+          <p class="tienote">△ = position decided by tiebreaker (equal totals, broken by criterion priority).</p>
+        </div>`)
       );
-    } else {
+    } else if (tab === "analytics") {
       host.replaceChildren(renderAnalytics(ev, latestScores, reveal));
+    } else if (tab === "peoples") {
+      const node = renderPeoples(ev, latestPeoples, aw, reveal, (code, n) => {
+        latestPeoples[code] = n;
+        savePeoplesCount(eventId, code, n);
+      });
+      updatePeoplesRanking = node._update;
+      host.replaceChildren(node);
     }
   }
 
-  $("#csv", c).onclick = () => exportCSV(ev, latestScores);
+  $("#csv", c).onclick = () => exportCSV(ev, latestScores, latestPeoples, aw);
+}
+
+// Winners banner: Judges' Choice top N (both methods) + People's Choice top N.
+function winnersSummary(ev, scaled, minmax, counts, aw, reveal) {
+  const nm = (r) => (reveal ? r.name || r.code : "Team #" + r.code);
+  const list = (rows) =>
+    rows
+      .filter((r) => r.place)
+      .slice(0, aw.judgesTopN)
+      .map((r) => `<li><span class="pl">${r.place}</span> ${esc(nm(r))} <span class="sc">${r.scaled ?? r.minmax}</span></li>`)
+      .join("") || `<li class="none">no scores yet</li>`;
+
+  const pcRanked = peoplesRanking(ev.teams, counts);
+  const pcHasData = pcRanked.some((r) => r.count > 0);
+  const pcBlock = aw.peoples.enabled
+    ? `<div class="wcard peoples"><h4>People's Choice — top ${aw.peoples.topN}</h4><ol>${
+        pcHasData
+          ? pcRanked
+              .slice(0, aw.peoples.topN)
+              .map((r) => `<li><span class="pl">${r.place}</span> ${esc(reveal ? r.name || r.code : "Team #" + r.code)} <span class="sc">${r.count} ${esc(aw.peoples.unit.toLowerCase())}</span></li>`)
+              .join("")
+          : `<li class="none">no ${esc(aw.peoples.unit.toLowerCase())} counted yet</li>`
+      }</ol></div>`
+    : "";
+
+  return `<div class="winners">
+    <div class="wcard"><h4>Judges' Choice — top ${aw.judgesTopN} <small>(Scaled)</small></h4><ol>${list(scaled)}</ol></div>
+    <div class="wcard"><h4>Judges' Choice — top ${aw.judgesTopN} <small>(Min-Max)</small></h4><ol>${list(minmax)}</ol></div>
+    ${pcBlock}
+  </div>`;
+}
+
+// Rank teams by People's Choice count (desc), unique places (ties broken by code).
+function peoplesRanking(teams, counts) {
+  const rows = teams.map((t) => ({ code: t.code, name: t.name, table: t.table, count: Number(counts[t.code]) || 0 }));
+  rows.sort((a, b) => b.count - a.count || String(a.code).localeCompare(String(b.code)));
+  let place = 0;
+  rows.forEach((r, i) => {
+    r.place = r.count > 0 ? i + 1 : null;
+  });
+  return rows;
+}
+
+// People's Choice entry + live ranking.
+function renderPeoples(ev, counts, aw, reveal, onSave) {
+  const node = el(`<div class="pc">
+    <div class="pc-head"><h3>People's Choice — ${esc(aw.peoples.unit)} count</h3>
+      <p class="hint">Enter the ${esc(aw.peoples.unit.toLowerCase())} counted at each team's box. Saves as you type; top ${aw.peoples.topN} win.</p></div>
+    <div class="pc-rank" id="pcRank"></div>
+    <div class="pc-grid" id="pcGrid"></div>
+  </div>`);
+  const grid = $("#pcGrid", node);
+  const teams = [...ev.teams].sort((a, b) => (a.dishNumber || 0) - (b.dishNumber || 0));
+  teams.forEach((t) => {
+    const row = el(`<div class="pc-row">
+      <span class="pc-code">${esc(t.code)}</span>
+      <span class="pc-name">${reveal ? esc(t.name || "") : "<i>hidden</i>"}</span>
+      <input class="pc-in" type="number" min="0" inputmode="numeric" value="${Number(counts[t.code]) || 0}">
+    </div>`);
+    const input = row.querySelector(".pc-in");
+    input.onchange = () => {
+      const n = Math.max(0, parseInt(input.value) || 0);
+      input.value = n;
+      onSave(t.code, n);
+      counts[t.code] = n;
+      update();
+    };
+    grid.appendChild(row);
+  });
+
+  function update() {
+    const ranked = peoplesRanking(ev.teams, counts);
+    const total = ranked.reduce((a, r) => a + r.count, 0);
+    const top = ranked.filter((r) => r.count > 0).slice(0, aw.peoples.topN);
+    $("#pcRank", node).innerHTML = `
+      <div class="pc-total">${total} ${esc(aw.peoples.unit.toLowerCase())} total</div>
+      <ol class="pc-winners">${
+        top.length
+          ? top.map((r) => `<li><span class="pl">${r.place}</span> ${esc(reveal ? r.name || r.code : "Team #" + r.code)} <b>${r.count}</b></li>`).join("")
+          : `<li class="none">no ${esc(aw.peoples.unit.toLowerCase())} yet</li>`
+      }</ol>`;
+  }
+  update();
+  node._update = update;
+  return node;
 }
 
 function board(title, rows, reveal) {
@@ -1017,13 +1161,23 @@ function judgesPerTeam(ev) {
   return Math.max(a, b) || 1;
 }
 
-function exportCSV(ev, scores) {
+function exportCSV(ev, scores, peoples, aw) {
+  aw = aw || eventAwards(ev);
   const { scaled, minmax } = computeLeaderboards(ev.criteria, ev.teams, scores);
   const mmByCode = Object.fromEntries(minmax.map((r) => [r.code, r]));
-  const lines = [["Place(Scaled)", "Code", "Team", "Table", "Scaled", "Place(MinMax)", "MinMax", "Judges"]];
+  const pc = peoplesRanking(ev.teams, peoples || {});
+  const pcByCode = Object.fromEntries(pc.map((r) => [r.code, r]));
+  const head = ["Place(Scaled)", "Code", "Team", "Table", "Scaled", "Place(MinMax)", "MinMax", "Judges"];
+  if (aw.peoples.enabled) head.push(aw.peoples.unit, "Place(People's)");
+  const lines = [head];
   scaled.forEach((r) => {
     const mm = mmByCode[r.code] || {};
-    lines.push([r.place ?? "", r.code, r.name, r.table, r.scaled, mm.place ?? "", r.minmax, r.judgeCount]);
+    const row = [r.place ?? "", r.code, r.name, r.table, r.scaled, mm.place ?? "", r.minmax, r.judgeCount];
+    if (aw.peoples.enabled) {
+      const p = pcByCode[r.code] || {};
+      row.push(p.count ?? 0, p.place ?? "");
+    }
+    lines.push(row);
   });
   const csv = lines.map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
@@ -1125,6 +1279,19 @@ function blankEvent(id) {
     schedule: { startTime: "13:00", intervalMin: 5 },
     adminPasscode: "",
     resultsPasscode: "",
+    awards: { judgesTopN: 3, peoples: { enabled: false, unit: "Coins", topN: 2 } },
+  };
+}
+
+function eventAwards(ev) {
+  const a = ev.awards || {};
+  return {
+    judgesTopN: a.judgesTopN || 3,
+    peoples: {
+      enabled: !!(a.peoples && a.peoples.enabled),
+      unit: (a.peoples && a.peoples.unit) || "Coins",
+      topN: (a.peoples && a.peoples.topN) || 2,
+    },
   };
 }
 
