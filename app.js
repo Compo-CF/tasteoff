@@ -44,6 +44,11 @@ function el(html) {
   return t.content.firstElementChild;
 }
 
+const ordinal = (n) => {
+  const s = ["th", "st", "nd", "rd"], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+};
+
 const DEFAULT_EVENT_ID = "houbbq-2026";
 const LS = {
   get judgeId() {
@@ -283,7 +288,7 @@ async function renderAdmin(preloaded) {
       <label class="chk"><input type="checkbox" id="aw_pc"${aw.peoples.enabled ? " checked" : ""}> Add a <b>People's Choice</b> award (coin/vote count per team)</label>
       <div class="row" id="aw_pcopts">
         <label>Unit label <input id="aw_unit" value="${esc(aw.peoples.unit)}"></label>
-        <label>Top <input id="aw_ptop" type="number" min="1" value="${aw.peoples.topN}" style="width:64px"></label>
+        <label>Top <input id="aw_ptop" type="number" min="1" value="${aw.peoples.topN || 3}" style="width:64px"></label>
       </div>
     </section>`);
   c.appendChild(awardsSec);
@@ -924,16 +929,32 @@ async function renderResults() {
     $("#prog", c).textContent = `${latestScores.length} score sheets in · ${ev.teams.length} dishes`;
     if (tab === "board") {
       const { scaled, minmax } = computeLeaderboards(ev.criteria, ev.teams, latestScores);
-      host.replaceChildren(
-        el(`<div>
-          ${winnersSummary(ev, scaled, minmax, latestPeoples, aw, reveal)}
-          <div class="boards">
-            ${board("Scaled (all judges)", scaled, reveal)}
-            ${board("Min-Max (drop hi/low)", minmax, reveal)}
-          </div>
-          <p class="tienote">△ = position decided by tiebreaker (equal totals, broken by criterion priority).</p>
-        </div>`)
-      );
+      const pcRanked = peoplesRanking(ev.teams, latestPeoples);
+      const node = el(`<div>
+        ${winnersSummary(ev, scaled, minmax, latestPeoples, aw, reveal)}
+        <div class="boardpick">
+          <label>Full standings
+            <select id="boardSel">
+              <option value="scaled">Judges — Scaled (all judges)</option>
+              <option value="minmax">Judges — Min-Max (drop hi/low)</option>
+              ${aw.peoples.enabled ? `<option value="peoples">People's Choice (${esc(aw.peoples.unit)})</option>` : ""}
+            </select>
+          </label>
+        </div>
+        <div id="fullBoard"></div>
+        <p class="tienote">△ = position decided by tiebreaker (equal totals, broken by criterion priority).</p>
+      </div>`);
+      const drawBoard = () => {
+        const v = $("#boardSel", node).value;
+        $("#fullBoard", node).innerHTML =
+          v === "peoples"
+            ? peoplesBoard(pcRanked, aw, reveal)
+            : board(v === "scaled" ? "Scaled (all judges)" : "Min-Max (drop hi/low)", v === "scaled" ? scaled : minmax, reveal);
+        $(".tienote", node).style.display = v === "peoples" ? "none" : "block";
+      };
+      $("#boardSel", node).onchange = drawBoard;
+      host.replaceChildren(node);
+      drawBoard();
     } else if (tab === "analytics") {
       host.replaceChildren(renderAnalytics(ev, latestScores, reveal));
     } else if (tab === "peoples") {
@@ -956,7 +977,7 @@ function winnersSummary(ev, scaled, minmax, counts, aw, reveal) {
     rows
       .filter((r) => r.place)
       .slice(0, aw.judgesTopN)
-      .map((r) => `<li><span class="pl">${r.place}</span> ${esc(nm(r))} <span class="sc">${r[key]}</span></li>`)
+      .map((r) => `<li><span class="pl">${ordinal(r.place)} Place</span> ${esc(nm(r))} <span class="sc">${r[key]}</span></li>`)
       .join("") || `<li class="none">no scores yet</li>`;
 
   const pcRanked = peoplesRanking(ev.teams, counts);
@@ -966,7 +987,7 @@ function winnersSummary(ev, scaled, minmax, counts, aw, reveal) {
         pcHasData
           ? pcRanked
               .slice(0, aw.peoples.topN)
-              .map((r) => `<li><span class="pl">${r.place}</span> ${esc(reveal ? r.name || r.code : "Team #" + r.code)} <span class="sc">${r.count} ${esc(aw.peoples.unit.toLowerCase())}</span></li>`)
+              .map((r) => `<li><span class="pl">${ordinal(r.place)} Place</span> ${esc(reveal ? r.name || r.code : "Team #" + r.code)} <span class="sc">${r.count} ${esc(aw.peoples.unit.toLowerCase())}</span></li>`)
               .join("")
           : `<li class="none">no ${esc(aw.peoples.unit.toLowerCase())} counted yet</li>`
       }</ol></div>`
@@ -1048,6 +1069,23 @@ function board(title, rows, reveal) {
     .join("");
   return `<div class="board"><h3>${esc(title)}</h3>
     <table><thead><tr><th>#</th><th>${reveal ? "Team" : "Code"}</th><th>Tbl</th><th>Score</th><th>Judges</th></tr></thead>
+    <tbody>${body}</tbody></table></div>`;
+}
+
+// Full People's Choice standings table.
+function peoplesBoard(rows, aw, reveal) {
+  const body = rows
+    .map(
+      (r) => `<tr class="${r.place === 1 ? "first" : ""}">
+        <td class="pl">${r.place ?? "–"}</td>
+        <td>${reveal ? esc(r.name || r.code) : esc(r.code)}</td>
+        <td class="tb">${esc(r.table)}</td>
+        <td class="sc">${r.count}</td>
+      </tr>`
+    )
+    .join("");
+  return `<div class="board"><h3>People's Choice — ${esc(aw.peoples.unit)}</h3>
+    <table><thead><tr><th>#</th><th>${reveal ? "Team" : "Code"}</th><th>Tbl</th><th>${esc(aw.peoples.unit)}</th></tr></thead>
     <tbody>${body}</tbody></table></div>`;
 }
 
@@ -1279,7 +1317,7 @@ function blankEvent(id) {
     schedule: { startTime: "13:00", intervalMin: 5 },
     adminPasscode: "",
     resultsPasscode: "",
-    awards: { judgesTopN: 3, peoples: { enabled: false, unit: "Coins", topN: 2 } },
+    awards: { judgesTopN: 3, peoples: { enabled: false, unit: "Coins", topN: 3 } },
   };
 }
 
@@ -1290,7 +1328,7 @@ function eventAwards(ev) {
     peoples: {
       enabled: !!(a.peoples && a.peoples.enabled),
       unit: (a.peoples && a.peoples.unit) || "Coins",
-      topN: (a.peoples && a.peoples.topN) || 2,
+      topN: (a.peoples && a.peoples.topN) || 3,
     },
   };
 }

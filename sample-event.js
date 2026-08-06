@@ -58,7 +58,7 @@ export function makeSampleEvent(id = "houbbq-2026") {
     schedule: { startTime, intervalMin },
     adminPasscode: "",
     resultsPasscode: "",
-    awards: { judgesTopN: 3, peoples: { enabled: true, unit: "Coins", topN: 2 } },
+    awards: { judgesTopN: 3, peoples: { enabled: true, unit: "Coins", topN: 3 } },
   };
 }
 

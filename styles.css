@@ -124,7 +124,7 @@ input, select {
 .wcard.peoples { border-color: #c9a227; }
 .wcard ol { margin: 0; padding: 0; list-style: none; }
 .wcard li { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 14px; }
-.wcard li .pl { font-weight: 800; width: 20px; color: var(--brand-2); }
+.wcard li .pl { font-weight: 800; color: var(--brand-2); white-space: nowrap; min-width: 62px; }
 .wcard li .sc { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
 .wcard li.none { color: var(--muted); font-style: italic; }
 
@@ -186,6 +186,9 @@ input, select {
 .prog { color: var(--muted); font-size: 13px; }
 .boards { display: grid; gap: 16px; }
 @media (min-width: 680px) { .boards { grid-template-columns: 1fr 1fr; } }
+.boardpick { margin: 4px 0 12px; }
+.boardpick label { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.boardpick select { width: auto; margin: 0; flex: 0 0 auto; }
 .board { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; box-shadow: var(--shadow); overflow-x: auto; }
 .board h3 { margin: 2px 0 10px; font-size: 15px; }
 .board table { width: 100%; border-collapse: collapse; font-size: 14px; }
