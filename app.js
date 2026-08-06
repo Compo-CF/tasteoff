@@ -952,11 +952,11 @@ async function renderResults() {
 // Winners banner: Judges' Choice top N (both methods) + People's Choice top N.
 function winnersSummary(ev, scaled, minmax, counts, aw, reveal) {
   const nm = (r) => (reveal ? r.name || r.code : "Team #" + r.code);
-  const list = (rows) =>
+  const list = (rows, key) =>
     rows
       .filter((r) => r.place)
       .slice(0, aw.judgesTopN)
-      .map((r) => `<li><span class="pl">${r.place}</span> ${esc(nm(r))} <span class="sc">${r.scaled ?? r.minmax}</span></li>`)
+      .map((r) => `<li><span class="pl">${r.place}</span> ${esc(nm(r))} <span class="sc">${r[key]}</span></li>`)
       .join("") || `<li class="none">no scores yet</li>`;
 
   const pcRanked = peoplesRanking(ev.teams, counts);
@@ -973,8 +973,8 @@ function winnersSummary(ev, scaled, minmax, counts, aw, reveal) {
     : "";
 
   return `<div class="winners">
-    <div class="wcard"><h4>Judges' Choice — top ${aw.judgesTopN} <small>(Scaled)</small></h4><ol>${list(scaled)}</ol></div>
-    <div class="wcard"><h4>Judges' Choice — top ${aw.judgesTopN} <small>(Min-Max)</small></h4><ol>${list(minmax)}</ol></div>
+    <div class="wcard"><h4>Judges' Choice — top ${aw.judgesTopN} <small>(Scaled)</small></h4><ol>${list(scaled, "scaled")}</ol></div>
+    <div class="wcard"><h4>Judges' Choice — top ${aw.judgesTopN} <small>(Min-Max)</small></h4><ol>${list(minmax, "minmax")}</ol></div>
     ${pcBlock}
   </div>`;
 }
