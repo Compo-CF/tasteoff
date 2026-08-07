@@ -183,7 +183,16 @@ function renderHome() {
   app().replaceChildren(
     el(`
     <div class="wrap home">
-      <div class="brand"><span class="logo">🍴</span> tasteoff</div>
+      <svg class="brandsvg" viewBox="0 0 470 116" role="img" aria-label="tasteoff — food-competition judging">
+        <rect x="14" y="22" width="58" height="72" rx="10" fill="var(--card)" stroke="var(--line)" stroke-width="2"/>
+        <path d="M22 40 l4 4 l8 -10" fill="none" stroke="var(--brand-2)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="40" y="37" width="22" height="6" rx="3" fill="var(--brand)"/>
+        <path d="M22 58 l4 4 l8 -10" fill="none" stroke="var(--brand-2)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="40" y="55" width="15" height="6" rx="3" fill="var(--muted)"/>
+        <path d="M22 76 l4 4 l8 -10" fill="none" stroke="var(--muted)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="40" y="73" width="10" height="6" rx="3" fill="var(--muted)" opacity="0.55"/>
+        <text x="90" y="74" font-family="inherit" font-weight="800" font-size="52" letter-spacing="-2"><tspan fill="var(--ink)">taste</tspan><tspan fill="var(--brand)">off</tspan></text>
+      </svg>
       <p class="tag">Food-competition judging — score on your phone, results live.</p>
       <div class="cards">
         <a class="card judge" href="#/judge">
