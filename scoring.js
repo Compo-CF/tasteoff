@@ -33,7 +33,14 @@ export function computeDishTotals(criteria, scoresByJudge) {
     const vals = [];
     for (const jid of judgeIds) {
       const v = scoresByJudge[jid] ? scoresByJudge[jid][crit.id] : undefined;
-      if (typeof v === "number" && !Number.isNaN(v) && v > 0) vals.push(v);
+      // Count any present numeric score, INCLUDING 0. Live judges only ever submit
+      // 1..5 (a criterion they didn't score is absent/undefined, not 0), so the
+      // only 0s in the data are absent-judge placeholders from ingested historical
+      // events. The official workbooks kept those 0s and dropped them as the low in
+      // the min/max trim, so we must count them here to reproduce the awarded totals
+      // (e.g. Truffle Masters 2024, where Money Cat's absent 6th judge is a 0 that
+      // gets trimmed away — giving its official 121.25, a tie for first).
+      if (typeof v === "number" && !Number.isNaN(v) && v >= 0) vals.push(v);
     }
     const sum = vals.reduce((a, b) => a + b, 0);
     fives += vals.filter((v) => v === 5).length;
