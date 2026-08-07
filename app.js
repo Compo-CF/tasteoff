@@ -174,6 +174,7 @@ async function render() {
   if (path === "/results") return renderResults();
   if (path === "/judges") return renderJudgesDB();
   if (path === "/history") return renderHistory();
+  if (path === "/runner") return renderRunner();
   return renderHome();
 }
 
@@ -746,6 +747,12 @@ function showLinks(ev, box) {
       rurl
     )}" onclick="this.select()"></div>`)
   );
+  const runurl = `${base}#/runner?event=${encodeURIComponent(ev.id)}`;
+  box.appendChild(
+    el(`<div class="linkcard"><h4>Runner sheet (confidential)</h4><input readonly value="${esc(
+      runurl
+    )}" onclick="this.select()"></div>`)
+  );
 }
 
 function makeQR(container, text) {
@@ -1003,7 +1010,7 @@ async function renderResults() {
   const c = el(`<div class="wrap results"></div>`);
   c.appendChild(el(`<div class="jbar"><a class="back" href="#/">←</a><div class="who">${esc(
     ev.name || "Results"
-  )}</div><button class="mini" id="csv">export CSV</button></div>`));
+  )}</div><a class="mini" href="#/runner?event=${encodeURIComponent(ev.id)}">Runner sheet</a><button class="mini" id="csv">export CSV</button></div>`));
   const aw = eventAwards(ev);
   const pcTab = aw.peoples.enabled
     ? `<button class="tab" data-tab="peoples">People's Choice</button>`
@@ -1405,6 +1412,47 @@ async function renderJudgesDB() {
     );
   });
   c.appendChild(list);
+  app().replaceChildren(c);
+}
+
+// ---------- RUNNER SHEET (organizer key: code -> joint -> pickup) ----------
+async function renderRunner() {
+  const myToken = renderToken;
+  const eventId = LS.activeEvent();
+  const ev = await loadEvent(eventId);
+  if (isStale(myToken)) return;
+  if (!ev) {
+    app().replaceChildren(el(`<div class="wrap"><a class="back" href="#/">← home</a><p class="empty">No event found.</p></div>`));
+    return;
+  }
+  if (ev.resultsPasscode && !resultsUnlocked) {
+    return gate("Results passcode", (val) => {
+      if (val === ev.resultsPasscode) { resultsUnlocked = true; renderRunner(); } else alert("Wrong passcode.");
+    });
+  }
+  const teams = [...(ev.teams || [])].sort(
+    (a, b) => (a.dishNumber || 0) - (b.dishNumber || 0) || String(a.serveTime).localeCompare(String(b.serveTime))
+  );
+  const rows = teams
+    .map(
+      (t) => `<tr>
+        <td class="rt">${esc(t.serveTime || "—")}</td>
+        <td class="tb">${t.dishNumber ?? ""}</td>
+        <td class="rc">${esc(t.code)}</td>
+        <td>${esc(t.name || "")}</td>
+        ${t.dishDescription ? `<td class="rd">${esc(t.dishDescription)}</td>` : "<td></td>"}
+      </tr>`
+    )
+    .join("");
+  const c = el(`<div class="wrap runner">
+    <div class="jbar noprint"><a class="back" href="#/">←</a><div class="who">${esc(ev.name || "Runner sheet")}</div>
+      <button class="mini" id="print">Print</button></div>
+    <h2 class="runner-h">Runner sheet — pickup schedule</h2>
+    <p class="sub confidential noprint">🔒 Confidential — reveals the blind code → joint key. Do not show judges.</p>
+    <table class="runner-table"><thead><tr><th>Pickup</th><th>Dish #</th><th>Code</th><th>Joint</th><th>Dish</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+  </div>`);
+  $("#print", c).onclick = () => window.print();
   app().replaceChildren(c);
 }
 
