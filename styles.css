@@ -279,7 +279,29 @@ input, select {
 .jdb-crit { display: flex; flex-wrap: wrap; gap: 6px; }
 .pcrit { font-size: 12px; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 3px 8px; }
 .pcrit b { color: var(--ink); }
+/* Judge rankings leaderboard */
+.jdb-rankwrap { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow); margin-bottom: 16px; }
+.jdb-rankhead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.jdb-rankhead h3 { margin: 0; }
+.rk-note { color: var(--muted); font-size: 11px; }
+.rk-scroll { overflow-x: auto; }
+.jdb-rank { width: 100%; border-collapse: collapse; font-size: 13px; }
+.jdb-rank th, .jdb-rank td { padding: 7px 8px; text-align: right; white-space: nowrap; }
+.jdb-rank th.rk-num, .jdb-rank td.rk-num { text-align: right; color: var(--muted); width: 2em; }
+.jdb-rank th.rk-name, .jdb-rank td.rk-name { text-align: left; white-space: normal; }
+.jdb-rank thead th { border-bottom: 2px solid var(--line); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+.jdb-rank thead th[data-k] { cursor: pointer; user-select: none; }
+.jdb-rank thead th[data-k]:hover { color: var(--ink); }
+.jdb-rank thead th.on { color: var(--accent, #b5482e); }
+.jdb-rank thead th[data-k]::after { content: attr(data-arrow); font-size: 9px; margin-left: 2px; }
+.jdb-rank tbody tr { border-bottom: 1px solid var(--line); }
+.jdb-rank tbody tr:nth-child(-n+3) .rk-num { font-weight: 800; color: var(--ink); }
+.jdb-rank td.rk-b { font-weight: 700; }
+.jdb-rank td.gen { color: #2e7d47; font-weight: 700; }
+.jdb-rank td.harsh { color: var(--warn); font-weight: 700; }
+.jdb-cardsh { margin: 4px 0 10px; }
 @media (prefers-color-scheme: dark) {
+  .jdb-rank td.gen { color: #6bbf85; }
   .tag.gen { background: #17321f; } .tag.harsh { background: #3a1b18; }
   .tag.steady { background: #16283c; } .tag.swingy { background: #33240f; }
 }

@@ -1373,45 +1373,141 @@ async function renderJudgesDB() {
     if (demo) ({ events, scoresByEvent } = demo);
   }
   const rosterMap = Object.fromEntries(roster.map((r) => [r.id, r]));
-  const profiles = judgeProfiles(rosterMap, events, scoresByEvent);
+  const allProfiles = judgeProfiles(rosterMap, events, scoresByEvent);
 
   const c = el(`<div class="wrap judgesdb"><a class="back" href="#/">← home</a>
     <h2>Judge database</h2>
-    <p class="sub">${profiles.length} judge(s) · ${events.length} event(s). Learned from every submitted ballot.</p></div>`);
+    <p class="sub" id="jsub"></p></div>`);
 
-  if (!profiles.length) {
+  if (!allProfiles.length) {
+    $("#jsub", c).textContent = "No judging data yet.";
     c.appendChild(el(`<p class="empty">No judging data yet. Once judges submit scores in an event, their profiles build here automatically.</p>`));
     app().replaceChildren(c);
     return;
   }
 
-  const list = el(`<div class="jdb-list"></div>`);
-  profiles.forEach((p) => {
-    const gTag =
-      p.generosity > 0.15 ? `<span class="tag gen">generous +${p.generosity}</span>`
-      : p.generosity < -0.15 ? `<span class="tag harsh">harsh ${p.generosity}</span>`
-      : `<span class="tag neu">balanced</span>`;
-    const cTag =
-      p.consistency <= 0.8 ? `<span class="tag steady">very consistent</span>`
-      : p.consistency >= 1.4 ? `<span class="tag swingy">high spread</span>`
-      : `<span class="tag neu">typical spread</span>`;
-    const crit = Object.keys(p.perCriterion)
-      .map((k) => `<span class="pcrit">${esc(k)} <b>${p.perCriterion[k]}</b></span>`)
-      .join("");
-    list.appendChild(
-      el(`<div class="jdb-card">
-        <div class="jdb-head"><h3>${esc(p.name)}</h3><span class="jdb-meta">${p.eventsJudged} event(s) · ${p.dishesScored} dishes</span></div>
-        <div class="jdb-stats">
-          <div><b>${p.avgScore}</b><span>avg score</span></div>
-          <div><b>${p.generosity > 0 ? "+" : ""}${p.generosity}</b><span>vs field</span></div>
-          <div><b>${p.consistency}</b><span>spread (σ)</span></div>
-        </div>
-        <div class="jdb-tags">${gTag}${cTag}</div>
-        <div class="jdb-crit">${crit}</div>
-      </div>`)
-    );
-  });
-  c.appendChild(list);
+  // Event-type ("series") filter: total list, plus a per-type pick-list (e.g. "who's
+  // judged Truffle Masters"). Series = the event name with its year stripped.
+  const seriesOf = (e) => String(e.name || "").replace(/\s*\b(19|20)\d{2}\b.*$/, "").trim() || String(e.name || e.id);
+  const seriesList = [...new Set(events.filter((e) => (scoresByEvent[e.id] || []).length).map(seriesOf))].sort();
+
+  const controls = el(`<div class="rcontrols">
+    <label class="serieslbl">Event type
+      <select id="jseries">
+        <option value="__all__">All events (total)</option>
+        ${seriesList.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join("")}
+      </select>
+    </label>
+  </div>`);
+  const host = el(`<div id="jhost"></div>`);
+  c.appendChild(controls);
+  c.appendChild(host);
+
+  const rankCols = [
+    { k: "eventsJudged", label: "Events" },
+    { k: "dishesScored", label: "Ballots" },
+    { k: "avgScore", label: "Avg" },
+    { k: "generosity", label: "vs field" },
+    { k: "consistency", label: "σ" },
+  ];
+  let sortK = "dishesScored";
+  let sortDir = -1; // -1 desc, +1 asc (persists across event-type switches)
+  let series = "__all__";
+
+  function render() {
+    const evs = series === "__all__" ? events : events.filter((e) => seriesOf(e) === series);
+    const profiles = judgeProfiles(rosterMap, evs, scoresByEvent);
+    const scoredEvents = evs.filter((e) => (scoresByEvent[e.id] || []).length).length;
+    const totalBallots = profiles.reduce((a, p) => a + p.dishesScored, 0);
+    const fieldAvg = totalBallots
+      ? Math.round((profiles.reduce((a, p) => a + p.avgScore * p.dishesScored, 0) / totalBallots) * 100) / 100
+      : 0;
+    $("#jsub", c).innerHTML =
+      series === "__all__"
+        ? `${profiles.length} judge(s) across ${scoredEvents} event(s). Learned from every submitted ballot.`
+        : `${profiles.length} judge(s) have judged <b>${esc(series)}</b> (${scoredEvents} event(s)) — your pick-list for the next one.`;
+
+    // ---- Ranked leaderboard (sortable) ----
+    const rankWrap = el(`<div class="jdb-rankwrap">
+      <div class="jdb-rankhead"><h3>Rankings${series === "__all__" ? "" : " — " + esc(series)}</h3>
+        <span class="rk-note">field avg <b>${fieldAvg}</b> · tap a column to sort · vs field: + generous, − tough · σ: lower = steadier</span></div>
+      <div class="rk-scroll"><table class="jdb-rank">
+        <thead><tr><th class="rk-num">#</th><th class="rk-name">Judge</th>
+          ${rankCols.map((col) => `<th data-k="${col.k}">${col.label}</th>`).join("")}
+        </tr></thead><tbody></tbody></table></div>
+    </div>`);
+    const rankBody = $("tbody", rankWrap);
+    const drawRank = () => {
+      const sorted = [...profiles].sort(
+        (a, b) =>
+          (a[sortK] - b[sortK]) * sortDir ||
+          b.dishesScored - a.dishesScored ||
+          String(a.name).localeCompare(String(b.name))
+      );
+      rankBody.replaceChildren(
+        ...sorted.map((p, i) =>
+          el(`<tr>
+            <td class="rk-num">${i + 1}</td>
+            <td class="rk-name">${esc(p.name)}</td>
+            <td>${p.eventsJudged}</td>
+            <td class="rk-b">${p.dishesScored}</td>
+            <td>${p.avgScore || "—"}</td>
+            <td class="${p.generosity > 0.15 ? "gen" : p.generosity < -0.15 ? "harsh" : ""}">${
+              p.dishesScored ? (p.generosity > 0 ? "+" : "") + p.generosity : "—"
+            }</td>
+            <td>${p.dishesScored ? p.consistency : "—"}</td>
+          </tr>`)
+        )
+      );
+      rankWrap.querySelectorAll("th[data-k]").forEach((th) => {
+        const on = th.dataset.k === sortK;
+        th.classList.toggle("on", on);
+        th.dataset.arrow = on ? (sortDir < 0 ? "▼" : "▲") : "";
+      });
+    };
+    rankWrap.querySelectorAll("th[data-k]").forEach((th) => {
+      th.onclick = () => {
+        const k = th.dataset.k;
+        if (sortK === k) sortDir = -sortDir;
+        else { sortK = k; sortDir = k === "consistency" ? 1 : -1; } // steadiest-first for σ, high-first otherwise
+        drawRank();
+      };
+    });
+    drawRank();
+
+    // ---- Detailed profile cards ----
+    const list = el(`<div class="jdb-list"></div>`);
+    profiles.forEach((p) => {
+      const gTag =
+        p.generosity > 0.15 ? `<span class="tag gen">generous +${p.generosity}</span>`
+        : p.generosity < -0.15 ? `<span class="tag harsh">harsh ${p.generosity}</span>`
+        : `<span class="tag neu">balanced</span>`;
+      const cTag =
+        p.consistency <= 0.8 ? `<span class="tag steady">very consistent</span>`
+        : p.consistency >= 1.4 ? `<span class="tag swingy">high spread</span>`
+        : `<span class="tag neu">typical spread</span>`;
+      const crit = Object.keys(p.perCriterion)
+        .map((k) => `<span class="pcrit">${esc(k)} <b>${p.perCriterion[k]}</b></span>`)
+        .join("");
+      list.appendChild(
+        el(`<div class="jdb-card">
+          <div class="jdb-head"><h3>${esc(p.name)}</h3><span class="jdb-meta">${p.eventsJudged} event(s) · ${p.dishesScored} dishes</span></div>
+          <div class="jdb-stats">
+            <div><b>${p.avgScore}</b><span>avg score</span></div>
+            <div><b>${p.generosity > 0 ? "+" : ""}${p.generosity}</b><span>vs field</span></div>
+            <div><b>${p.consistency}</b><span>spread (σ)</span></div>
+          </div>
+          <div class="jdb-tags">${gTag}${cTag}</div>
+          <div class="jdb-crit">${crit}</div>
+        </div>`)
+      );
+    });
+
+    host.replaceChildren(rankWrap, el(`<h3 class="jdb-cardsh">Profiles</h3>`), list);
+  }
+
+  $("#jseries", c).onchange = (e) => { series = e.target.value; render(); };
+  render();
   app().replaceChildren(c);
 }
 
