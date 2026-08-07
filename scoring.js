@@ -118,9 +118,18 @@ function rankBy(rows, key, criteria) {
   };
   const rawTotal = (row) => (row.perCriterion || []).reduce((a, p) => a + p.sum, 0);
 
+  const other = key === "minmax" ? "scaled" : "minmax";
   const cmp = (a, b) => {
     if (b[key] !== a[key]) return { d: b[key] - a[key], tie: false };
-    // primary totals equal → tiebreak cascade
+    // primary totals equal → tiebreak cascade.
+    // (1) The *other* aggregation total: a dish that also scores higher across all
+    // judges (or on the trimmed mean) is the stronger dish. This matches how the
+    // official workbooks resolved exact ties — e.g. WFW 2025, where Swift & Company
+    // and Phat Eatery both hit min-max 165.24 but Swift's Scaled total (270.00 vs
+    // 266.76) made it the winner. Critical when weights are flat (equal across all
+    // criteria), which makes the criterion-priority step below meaningless.
+    if (b[other] !== a[other]) return { d: b[other] - a[other], tie: true };
+    // (2) criterion priority: higher summed score on the highest-weighted criterion.
     for (const c of byWeight) {
       const d = critSum(b, c.id) - critSum(a, c.id);
       if (d !== 0) return { d, tie: true };
