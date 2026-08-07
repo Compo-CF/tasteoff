@@ -295,6 +295,11 @@ input, select {
 .modal h4 { margin: 14px 0 6px; }
 .clickrow { cursor: pointer; }
 .clickrow:hover td { background: rgba(181,54,31,.08); }
+.serieslbl { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 8px; margin: 0; }
+.serieslbl select { width: auto; margin: 0; }
+.whytext { font-size: 15px; line-height: 1.5; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 8px 0; }
+.dd-judges .sc.pos { color: #2e7d47; }
+.dd-judges .sc.neg { color: var(--warn); }
 .modal h3 { margin: 0 0 4px; }
 .modal .sub { font-size: 13px; margin: 0 0 12px; }
 .rec-list { display: grid; gap: 8px; }

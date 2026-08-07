@@ -20,7 +20,7 @@ import {
 import { BUILTIN_TEMPLATES, templateCriteria } from "./templates.js";
 import { computeLeaderboards, SCORE_STEPS } from "./scoring.js";
 import { parseFile, parseGoogleSheet, workbookToTemplates } from "./import-sheet.js";
-import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles, eventsOverview, restaurantHistory, participantProfile } from "./analytics.js";
+import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles, eventsOverview, restaurantHistory, participantProfile, explainWinner } from "./analytics.js";
 import { barChart, divergingChart, histogram, radar } from "./charts.js";
 
 // stable judge id from a name, so the same person links across events
@@ -1420,22 +1420,33 @@ async function renderHistory() {
   let hist = events.filter((e) => e.historical);
   if (!hist.length) hist = events;
 
-  const overview = eventsOverview(hist, scoresByEvent);
-  const restaurants = restaurantHistory(hist, scoresByEvent);
-  const totalBallots = overview.reduce((a, e) => a + e.ballots, 0);
+  // Derive the "series" (event type) from each event name by stripping the year.
+  const seriesOf = (e) => String(e.name || "").replace(/\s*\b(19|20)\d{2}\b.*$/, "").trim() || String(e.name || e.id);
+  const seriesList = [...new Set(hist.map(seriesOf))].sort();
+  let series = "__all__";
+  let tab = "events";
+  const idByName = {}; // event name -> id (for winner lookup)
+  hist.forEach((e) => (idByName[e.name] = e.id));
 
   const c = el(`<div class="wrap history">
     <a class="back" href="#/">← home</a>
     <h2>Historical analysis</h2>
-    <p class="sub">${hist.length} events · ${restaurants.length} restaurants · ${totalBallots} ballots. <a href="#/judges">Judge database →</a></p>
-    <div class="rcontrols"><div class="tabs">
-      <button class="tab active" data-tab="events">Events</button>
-      <button class="tab" data-tab="restaurants">Participants</button>
-    </div></div>
+    <p class="sub" id="hsub"></p>
+    <div class="rcontrols">
+      <div class="tabs">
+        <button class="tab active" data-tab="events">Events</button>
+        <button class="tab" data-tab="restaurants">Participants</button>
+      </div>
+      <label class="serieslbl">Event type
+        <select id="seriesSel">
+          <option value="__all__">All event types</option>
+          ${seriesList.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join("")}
+        </select>
+      </label>
+    </div>
     <div id="hhost"></div>
   </div>`);
   const host = $("#hhost", c);
-  let tab = "events";
   c.querySelectorAll(".tab").forEach((t) => {
     t.onclick = () => {
       tab = t.dataset.tab;
@@ -1443,11 +1454,24 @@ async function renderHistory() {
       draw();
     };
   });
+  $("#seriesSel", c).onchange = (e) => {
+    series = e.target.value;
+    draw();
+  };
+  const currentEvents = () => (series === "__all__" ? hist : hist.filter((e) => seriesOf(e) === series));
+
   function draw() {
+    const evs = currentEvents();
+    const overview = eventsOverview(evs, scoresByEvent);
+    const restaurants = restaurantHistory(evs, scoresByEvent);
+    const ballots = overview.reduce((a, e) => a + e.ballots, 0);
+    $("#hsub", c).innerHTML = `${evs.length} event(s) · ${restaurants.length} participants · ${ballots} ballots${
+      series === "__all__" ? "" : ` — <b>${esc(series)}</b> only`
+    }. <a href="#/judges">Judge database →</a>`;
     if (tab === "events") {
       const rows = overview
         .map(
-          (e) => `<tr>
+          (e) => `<tr class="clickrow" data-name="${esc(e.name)}">
             <td>${esc(e.name)}</td>
             <td class="tb">${e.teams}</td>
             <td class="tb">${e.judges}</td>
@@ -1457,11 +1481,12 @@ async function renderHistory() {
           </tr>`
         )
         .join("");
-      host.replaceChildren(
-        el(`<div class="board"><table>
+      const node = el(`<div class="board"><table>
           <thead><tr><th>Event</th><th>Teams</th><th>Judges</th><th>Ballots</th><th>Field avg</th><th>Winner (Scaled)</th></tr></thead>
-          <tbody>${rows}</tbody></table></div>`)
-      );
+          <tbody>${rows}</tbody></table></div>
+          <p class="tienote">Tap an event to see why the winner won.</p>`);
+      node.querySelectorAll(".clickrow").forEach((tr) => (tr.onclick = () => showWinner(idByName[tr.dataset.name])));
+      host.replaceChildren(node);
     } else {
       const rows = restaurants
         .map(
@@ -1490,8 +1515,36 @@ async function renderHistory() {
     }
   }
 
+  function showWinner(eventId) {
+    const ev = hist.find((e) => e.id === eventId);
+    if (!ev) return;
+    const w = explainWinner(ev, scoresByEvent[eventId] || []);
+    if (!w) {
+      const ovn = el(`<div class="modal-ov"><div class="modal"><div class="dd-head"><h3>${esc(ev.name)}</h3><button class="mini" id="wClose">close</button></div><p class="empty">No scored results.</p></div></div>`);
+      $("#wClose", ovn).onclick = () => ovn.remove();
+      ovn.onclick = (e) => { if (e.target === ovn) ovn.remove(); };
+      document.body.appendChild(ovn);
+      return;
+    }
+    const critRows = w.topCriteria
+      .map(
+        (d) => `<tr><td>${esc(d.short)}</td><td class="sc">${d.winnerAvg}</td><td class="sc">${d.fieldAvg}</td><td class="sc ${d.delta >= 0 ? "pos" : "neg"}">${d.delta > 0 ? "+" : ""}${d.delta}</td></tr>`
+      )
+      .join("");
+    const ov = el(`<div class="modal-ov"><div class="modal wide">
+      <div class="dd-head"><h3>🏆 ${esc(w.winner)}</h3><button class="mini" id="wClose">close</button></div>
+      <p class="sub">${esc(ev.name)} · winner (Scaled)</p>
+      <p class="whytext">${esc(w.summary)}</p>
+      <h4>Winner vs. field, by criterion</h4>
+      <table class="dd-judges"><thead><tr><th>Criterion</th><th>Winner</th><th>Field</th><th>Δ</th></tr></thead><tbody>${critRows}</tbody></table>
+    </div></div>`);
+    $("#wClose", ov).onclick = () => ov.remove();
+    ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+    document.body.appendChild(ov);
+  }
+
   function showParticipant(name) {
-    const p = participantProfile(hist, scoresByEvent, name);
+    const p = participantProfile(currentEvents(), scoresByEvent, name);
     const track = p.appearances
       .map((a) => `<tr><td>${esc(a.event)}</td><td class="tb">${a.place ? ordinal(a.place) + " / " + a.field : "–"}</td><td class="sc">${a.score}</td></tr>`)
       .join("");

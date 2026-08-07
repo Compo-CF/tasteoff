@@ -216,6 +216,39 @@ export function restaurantHistory(events, scoresByEvent) {
     .sort((a, b) => b.wins - a.wins || a.avgPlace - b.avgPlace || b.appearances - a.appearances);
 }
 
+// Explain WHY the winner won an event, from the scoring (Scaled leaderboard).
+export function explainWinner(event, scores) {
+  const { scaled } = computeLeaderboards(event.criteria || [], event.teams || [], scores || []);
+  const scored = scaled.filter((r) => r.scaled > 0);
+  if (!scored.length) return null;
+  const w = scored[0], run = scored[1] || null;
+  const flat = flatten(scores || []);
+  const critName = Object.fromEntries((event.criteria || []).map((c) => [c.id, c.shortName || c.name]));
+  const wflat = flat.filter((f) => f.teamCode === w.code);
+  const deltas = (event.criteria || [])
+    .map((c) => {
+      const fieldAvg = mean(flat.filter((f) => f.critId === c.id).map((f) => f.value));
+      const winnerAvg = mean(wflat.filter((f) => f.critId === c.id).map((f) => f.value));
+      return { short: critName[c.id], winnerAvg: round2(winnerAvg), fieldAvg: round2(fieldAvg), delta: round2(winnerAvg - fieldAvg) };
+    })
+    .sort((a, b) => b.delta - a.delta);
+  // consensus: spread of the winner's per-judge AVERAGE scores (1–5 scale)
+  const perJudge = {};
+  wflat.forEach((f) => (perJudge[f.judgeId] = perJudge[f.judgeId] || []).push(f.value));
+  const spread = round2(stdev(Object.values(perJudge).map((vals) => mean(vals))));
+  const margin = run ? round2(w.scaled - run.scaled) : null;
+
+  const strengths = deltas.filter((d) => d.delta > 0.05).slice(0, 3);
+  const consensus = spread <= 0.35 ? "broad agreement across the judges" : spread >= 0.8 ? "a split panel — carried by its champions" : "solid consensus";
+  let summary = `${w.name || w.code} won with ${w.scaled} points`;
+  if (run) summary += `, ${margin} ahead of ${run.name || run.code}`;
+  if (strengths.length)
+    summary += `. It pulled ahead on ${strengths.map((d) => `${d.short} (${d.winnerAvg} vs field ${d.fieldAvg})`).join(" and ")}`;
+  summary += `, with ${consensus} (σ ${spread}).`;
+
+  return { winner: w.name || w.code, score: w.scaled, runnerUp: run ? run.name || run.code : null, margin, topCriteria: deltas, spread, judgeCount: w.judgeCount, summary };
+}
+
 // Deep profile for one participant across all events they entered.
 export function participantProfile(events, scoresByEvent, name) {
   // global judge means (for affinity: does a judge score this participant above their own norm?)
