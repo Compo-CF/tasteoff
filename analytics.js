@@ -2,6 +2,14 @@
 // No DOM, no Firebase. Fed the same {criteria, teams, scores} the scoring engine uses.
 import { computeLeaderboards } from "./scoring.js";
 
+// Rank an event by its OFFICIAL method (Min-Max or Scaled, stored per event).
+const methodOf = (ev) => (ev && ev.officialMethod === "minmax" ? "minmax" : "scaled");
+const officialVal = (row, method) => (method === "minmax" ? row.minmax : row.scaled);
+function officialRanked(ev, scores) {
+  const lb = computeLeaderboards(ev.criteria || [], ev.teams || [], scores || []);
+  return methodOf(ev) === "minmax" ? lb.minmax : lb.scaled;
+}
+
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 function stdev(a) {
@@ -165,8 +173,8 @@ function pearson(x, y) {
 export function eventsOverview(events, scoresByEvent) {
   return events.map((ev) => {
     const scores = scoresByEvent[ev.id] || [];
-    const { scaled } = computeLeaderboards(ev.criteria || [], ev.teams || [], scores);
-    const winner = scaled.find((r) => r.place === 1);
+    const ranked = officialRanked(ev, scores);
+    const winner = ranked.find((r) => r.place === 1);
     const flat = flatten(scores);
     return {
       id: ev.id,
@@ -175,6 +183,7 @@ export function eventsOverview(events, scoresByEvent) {
       judges: (ev.judges || []).length,
       ballots: scores.length,
       winner: winner ? winner.name || winner.code : "—",
+      method: methodOf(ev) === "minmax" ? "Min-Max" : "Scaled",
       fieldAvg: round2(mean(flat.map((f) => f.value))),
     };
   });
@@ -185,17 +194,19 @@ export function restaurantHistory(events, scoresByEvent) {
   const byName = {};
   for (const ev of events) {
     const scores = scoresByEvent[ev.id] || [];
-    const { scaled } = computeLeaderboards(ev.criteria || [], ev.teams || [], scores);
-    const field = scaled.length;
-    for (const row of scaled) {
-      if (!(row.scaled > 0)) continue; // only dishes that were actually judged
+    const method = methodOf(ev);
+    const ranked = officialRanked(ev, scores);
+    const field = ranked.filter((r) => officialVal(r, method) > 0).length;
+    for (const row of ranked) {
+      const val = officialVal(row, method);
+      if (!(val > 0)) continue; // only dishes that were actually judged
       const key = row.name || row.code;
       (byName[key] = byName[key] || { name: key, apps: [] }).apps.push({
         event: ev.name || ev.id,
         eventId: ev.id,
         place: row.place,
         field,
-        perJudge: round2(row.scaled / Math.max(1, row.judgeCount)), // ~0–36, comparable across events
+        perJudge: round2(val / Math.max(1, row.judgeCount)), // comparable across events
       });
     }
   }
@@ -216,12 +227,14 @@ export function restaurantHistory(events, scoresByEvent) {
     .sort((a, b) => b.wins - a.wins || a.avgPlace - b.avgPlace || b.appearances - a.appearances);
 }
 
-// Explain WHY the winner won an event, from the scoring (Scaled leaderboard).
+// Explain WHY the winner won an event, from the scoring (official method).
 export function explainWinner(event, scores) {
-  const { scaled } = computeLeaderboards(event.criteria || [], event.teams || [], scores || []);
-  const scored = scaled.filter((r) => r.scaled > 0);
+  const method = methodOf(event);
+  const ranked = officialRanked(event, scores || []);
+  const scored = ranked.filter((r) => officialVal(r, method) > 0);
   if (!scored.length) return null;
   const w = scored[0], run = scored[1] || null;
+  const wVal = officialVal(w, method), runVal = run ? officialVal(run, method) : null;
   const flat = flatten(scores || []);
   const critName = Object.fromEntries((event.criteria || []).map((c) => [c.id, c.shortName || c.name]));
   const wflat = flat.filter((f) => f.teamCode === w.code);
@@ -236,17 +249,18 @@ export function explainWinner(event, scores) {
   const perJudge = {};
   wflat.forEach((f) => (perJudge[f.judgeId] = perJudge[f.judgeId] || []).push(f.value));
   const spread = round2(stdev(Object.values(perJudge).map((vals) => mean(vals))));
-  const margin = run ? round2(w.scaled - run.scaled) : null;
+  const margin = run ? round2(wVal - runVal) : null;
+  const methodLabel = method === "minmax" ? "Min-Max" : "Scaled";
 
   const strengths = deltas.filter((d) => d.delta > 0.05).slice(0, 3);
   const consensus = spread <= 0.35 ? "broad agreement across the judges" : spread >= 0.8 ? "a split panel — carried by its champions" : "solid consensus";
-  let summary = `${w.name || w.code} won with ${w.scaled} points`;
+  let summary = `${w.name || w.code} won with ${wVal} points (${methodLabel})`;
   if (run) summary += `, ${margin} ahead of ${run.name || run.code}`;
   if (strengths.length)
     summary += `. It pulled ahead on ${strengths.map((d) => `${d.short} (${d.winnerAvg} vs field ${d.fieldAvg})`).join(" and ")}`;
   summary += `, with ${consensus} (σ ${spread}).`;
 
-  return { winner: w.name || w.code, score: w.scaled, runnerUp: run ? run.name || run.code : null, margin, topCriteria: deltas, spread, judgeCount: w.judgeCount, summary };
+  return { winner: w.name || w.code, score: wVal, method: methodLabel, runnerUp: run ? run.name || run.code : null, margin, topCriteria: deltas, spread, judgeCount: w.judgeCount, summary };
 }
 
 // Deep profile for one participant across all events they entered.
@@ -269,15 +283,16 @@ export function participantProfile(events, scoresByEvent, name) {
     const evScores = scoresByEvent[ev.id] || [];
     const mine = evScores.filter((s) => s.teamCode === team.code);
     if (!mine.length) continue;
-    const { scaled } = computeLeaderboards(ev.criteria || [], ev.teams || [], evScores);
-    const row = scaled.find((r) => r.code === team.code) || {};
+    const method = methodOf(ev);
+    const ranked = officialRanked(ev, evScores);
+    const row = ranked.find((r) => r.code === team.code) || {};
     const critName = Object.fromEntries((ev.criteria || []).map((c) => [c.id, c.shortName || c.name]));
     const nameOf = Object.fromEntries((ev.judges || []).map((j) => [j.id, j.name]));
     appearances.push({
       event: ev.name || ev.id,
       place: row.place,
-      field: scaled.filter((r) => r.scaled > 0).length,
-      score: round2((row.scaled || 0) / Math.max(1, row.judgeCount)),
+      field: ranked.filter((r) => officialVal(r, method) > 0).length,
+      score: round2((officialVal(row, method) || 0) / Math.max(1, row.judgeCount)),
     });
     for (const s of mine) {
       for (const [cid, v] of Object.entries(s.criterionScores || {})) {

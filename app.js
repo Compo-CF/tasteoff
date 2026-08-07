@@ -1482,7 +1482,7 @@ async function renderHistory() {
         )
         .join("");
       const node = el(`<div class="board"><table>
-          <thead><tr><th>Event</th><th>Teams</th><th>Judges</th><th>Ballots</th><th>Field avg</th><th>Winner (Scaled)</th></tr></thead>
+          <thead><tr><th>Event</th><th>Teams</th><th>Judges</th><th>Ballots</th><th>Field avg</th><th>Winner</th></tr></thead>
           <tbody>${rows}</tbody></table></div>
           <p class="tienote">Tap an event to see why the winner won.</p>`);
       node.querySelectorAll(".clickrow").forEach((tr) => (tr.onclick = () => showWinner(idByName[tr.dataset.name])));
@@ -1533,7 +1533,7 @@ async function renderHistory() {
       .join("");
     const ov = el(`<div class="modal-ov"><div class="modal wide">
       <div class="dd-head"><h3>🏆 ${esc(w.winner)}</h3><button class="mini" id="wClose">close</button></div>
-      <p class="sub">${esc(ev.name)} · winner (Scaled)</p>
+      <p class="sub">${esc(ev.name)} · winner (${esc(w.method)})</p>
       <p class="whytext">${esc(w.summary)}</p>
       <h4>Winner vs. field, by criterion</h4>
       <table class="dd-judges"><thead><tr><th>Criterion</th><th>Winner</th><th>Field</th><th>Δ</th></tr></thead><tbody>${critRows}</tbody></table>
