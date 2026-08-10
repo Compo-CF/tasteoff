@@ -184,17 +184,19 @@ function renderHome() {
   app().replaceChildren(
     el(`
     <div class="wrap home">
-      <svg class="brandsvg" viewBox="0 0 470 116" role="img" aria-label="tasteoff — food-competition judging">
-        <rect x="14" y="22" width="58" height="72" rx="10" fill="var(--card)" stroke="var(--line)" stroke-width="2"/>
-        <path d="M22 40 l4 4 l8 -10" fill="none" stroke="var(--brand-2)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
-        <rect x="40" y="37" width="22" height="6" rx="3" fill="var(--brand)"/>
-        <path d="M22 58 l4 4 l8 -10" fill="none" stroke="var(--brand-2)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
-        <rect x="40" y="55" width="15" height="6" rx="3" fill="var(--muted)"/>
-        <path d="M22 76 l4 4 l8 -10" fill="none" stroke="var(--muted)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
-        <rect x="40" y="73" width="10" height="6" rx="3" fill="var(--muted)" opacity="0.55"/>
-        <text x="90" y="74" font-family="inherit" font-weight="800" font-size="52" letter-spacing="-2"><tspan fill="var(--ink)">taste</tspan><tspan fill="var(--brand)">off</tspan></text>
+      <svg class="brandsvg" viewBox="0 0 350 128" role="img" aria-label="tasteoff — digital scorecards for food competitions">
+        <rect x="8" y="20" width="76" height="92" rx="14" fill="var(--card)" stroke="var(--line)" stroke-width="2"/>
+        <rect x="33" y="13" width="26" height="15" rx="7" fill="var(--brand)"/>
+        <rect x="42" y="16" width="8" height="4" rx="2" fill="var(--card)" opacity="0.7"/>
+        <path d="M18 44 l5 5 l10 -12" fill="none" stroke="var(--brand-2)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="44" y="40" width="30" height="6" rx="3" fill="var(--brand)"/>
+        <path d="M18 64 l5 5 l10 -12" fill="none" stroke="var(--brand-2)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="44" y="60" width="21" height="6" rx="3" fill="var(--muted)"/>
+        <path d="M18 84 l5 5 l10 -12" fill="none" stroke="var(--muted)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="44" y="80" width="14" height="6" rx="3" fill="var(--muted)" opacity="0.55"/>
+        <text x="100" y="86" font-family="inherit" font-weight="800" font-size="56" letter-spacing="-2.5"><tspan fill="var(--ink)">taste</tspan><tspan fill="var(--brand)">off</tspan></text>
       </svg>
-      <p class="tag">Food-competition judging — score on your phone, results live.</p>
+      <p class="tag">Digital scorecards for food competitions — score live, from any device.</p>
       <div class="cards">
         <a class="card judge" href="#/judge">
           <div class="ci">📝</div><h3>I'm a Judge</h3>
