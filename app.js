@@ -1409,6 +1409,9 @@ async function renderJudgesDB() {
     </label>
   </div>`);
   const host = el(`<div id="jhost"></div>`);
+  c.appendChild(el(`<div class="scoreblurb">
+    <b>How to read this.</b> Every judge scores each dish <b>1–5</b> on each criterion. <b>Avg</b> is that judge's mean rating across every ballot. <b>vs field</b> is their generosity — how far above (+) or below (−) each event's average they tend to score, so it flags tough vs. generous graders. <b>σ</b> is consistency — the spread of their scores, where lower means steadier. <b>Ballots</b> = dishes scored, <b>Events</b> = events judged. Pick an event type to rank only the judges who've worked it.
+  </div>`));
   c.appendChild(controls);
   c.appendChild(host);
 
@@ -1636,10 +1639,15 @@ async function renderHistory() {
           </tr>`
         )
         .join("");
-      const node = el(`<div class="board"><table>
+      const node = el(`<div>
+        <div class="scoreblurb">
+          <b>How events are scored.</b> Judges rate every dish <b>1–5</b> on each weighted criterion. <b>Field avg</b> is the plain average of all those 1–5 ratings across the whole event — a quick read on how tough or generous the panel was overall. The <b>Winner</b> is decided by the event's <em>official method</em>: <b>Scaled</b> (every judge's weighted scores summed) or <b>Min-Max</b> (same, but each dish's single highest and lowest judge scores are dropped first).
+        </div>
+        <div class="board"><table>
           <thead><tr><th>Event</th><th>Teams</th><th>Judges</th><th>Ballots</th><th>Field avg</th><th>Winner</th></tr></thead>
           <tbody>${rows}</tbody></table></div>
-          <p class="tienote">Tap an event to see why the winner won.</p>`);
+          <p class="tienote">Tap an event to see why the winner won.</p>
+        </div>`);
       node.querySelectorAll(".clickrow").forEach((tr) => (tr.onclick = () => showWinner(idByName[tr.dataset.name])));
       host.replaceChildren(node);
     } else {
