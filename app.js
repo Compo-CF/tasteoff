@@ -1578,6 +1578,8 @@ async function renderHistory() {
   const seriesList = [...new Set(hist.map(seriesOf))].sort();
   let series = "__all__";
   let tab = "events";
+  let pSortK = "avgScore"; // participants table sort column
+  let pSortDir = -1; // -1 desc (high→low), +1 asc
   const idByName = {}; // event name -> id (for winner lookup)
   hist.forEach((e) => (idByName[e.name] = e.id));
 
@@ -1641,7 +1643,10 @@ async function renderHistory() {
       node.querySelectorAll(".clickrow").forEach((tr) => (tr.onclick = () => showWinner(idByName[tr.dataset.name])));
       host.replaceChildren(node);
     } else {
-      const rows = restaurants
+      const psorted = [...restaurants].sort(
+        (a, b) => (a[pSortK] - b[pSortK]) * pSortDir || b.avgScore - a.avgScore || String(a.name).localeCompare(String(b.name))
+      );
+      const rows = psorted
         .map(
           (r, i) => `<tr class="clickrow" data-name="${esc(r.name)}">
             <td class="pl">${i + 1}</td>
@@ -1657,13 +1662,22 @@ async function renderHistory() {
         .join("");
       const node = el(`<div>
         <div class="scoreblurb">
-          <b>How scoring works.</b> Every judge rates each dish <b>1–5</b> on each criterion. An event's winner is set by its <em>official method</em>: <b>Scaled</b> (all judges' scores, each criterion weighted) or <b>Min-Max</b> (same, but each dish's single highest and lowest judge scores are dropped first). Those totals live on their scale and aren't comparable between events. The <b>Avg score</b> column below sidesteps that — it's the plain average of every 1–5 rating a participant received, so it reads the same across all events regardless of method or weighting.
+          <b>How scoring works.</b> Every judge rates each dish <b>1–5</b> on each criterion. An event's winner is set by its <em>official method</em>: <b>Scaled</b> (all judges' scores, each criterion weighted) or <b>Min-Max</b> (same, but each dish's single highest and lowest judge scores are dropped first). Those totals live on their scale and aren't comparable between events. The <b>Avg (1–5)</b> column below sidesteps that — it's the plain average of every 1–5 rating a participant received, so it reads the same across all events regardless of method or weighting.
         </div>
         <div class="board"><table>
-          <thead><tr><th>#</th><th>Participant</th><th>Apps</th><th>Wins</th><th>Top 3</th><th>Best</th><th>Avg place</th><th>Avg (1–5)</th></tr></thead>
+          <thead><tr><th>#</th><th>Participant</th><th data-k="appearances">Events</th><th data-k="wins">Wins</th><th data-k="podiums">Top 3</th><th data-k="bestPlace">Best</th><th data-k="avgPlace">Avg place</th><th data-k="avgScore">Avg (1–5)</th></tr></thead>
           <tbody>${rows}</tbody></table></div>
-          <p class="tienote">Tap a participant for their profile · “Apps” = events entered · “Avg (1–5)” = mean of every judge × criterion rating.</p>
+          <p class="tienote">Tap a column to sort · tap a participant for their profile · “Events” = events entered · “Avg (1–5)” = mean of every judge × criterion rating.</p>
         </div>`);
+      node.querySelectorAll("th[data-k]").forEach((th) => {
+        if (th.dataset.k === pSortK) th.dataset.arrow = pSortDir < 0 ? " ▼" : " ▲";
+        th.onclick = () => {
+          const k = th.dataset.k;
+          if (pSortK === k) pSortDir = -pSortDir;
+          else { pSortK = k; pSortDir = k === "bestPlace" || k === "avgPlace" ? 1 : -1; } // place cols: best first
+          draw();
+        };
+      });
       node.querySelectorAll(".clickrow").forEach((tr) => {
         tr.onclick = () => showParticipant(tr.dataset.name);
       });
