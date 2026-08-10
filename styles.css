@@ -54,6 +54,9 @@ button { font: inherit; cursor: pointer; }
 .card.admin { border-left: 5px solid var(--muted); }
 .card.judgesdb { border-left: 5px solid #3b6ea5; }
 .card.history { border-left: 5px solid #2e7d47; }
+.card.participants { border-left: 5px solid #7a4fa3; }
+.switchlink { display: inline-block; font-size: 13px; font-weight: 700; text-decoration: none; color: var(--brand); background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 6px 14px; }
+.switchlink:active { transform: scale(0.97); }
 .foot { margin-top: 28px; color: var(--muted); font-size: 13px; }
 .demo-link { display: inline-block; margin-top: 6px; font-size: 13px; font-weight: 600; }
 

@@ -173,7 +173,8 @@ async function render() {
   if (path === "/judge") return renderJudge(params);
   if (path === "/results") return renderResults();
   if (path === "/judges") return renderJudgesDB();
-  if (path === "/history") return renderHistory();
+  if (path === "/history") return renderHistory("events");
+  if (path === "/participants") return renderHistory("restaurants");
   if (path === "/runner") return renderRunner();
   return renderHome();
 }
@@ -212,8 +213,12 @@ function renderHome() {
           <p>How your judges behave over time.</p>
         </a>
         <a class="card history" href="#/history">
-          <div class="ci">📈</div><h3>Historical analysis</h3>
-          <p>Events &amp; restaurant track records.</p>
+          <div class="ci">📈</div><h3>Event history</h3>
+          <p>Past events, winners &amp; why they won.</p>
+        </a>
+        <a class="card participants" href="#/participants">
+          <div class="ci">👥</div><h3>Participant history</h3>
+          <p>Restaurant track records &amp; rankings.</p>
         </a>
       </div>
       <p class="foot">Add to Home Screen to use it like an app.</p>
@@ -1565,10 +1570,11 @@ async function renderRunner() {
 }
 
 // ---------- HISTORICAL ANALYSIS ----------
-async function renderHistory() {
+async function renderHistory(mode) {
   const myToken = renderToken;
+  const title = mode === "restaurants" ? "Participant history" : "Event history";
   app().replaceChildren(
-    el(`<div class="wrap"><a class="back" href="#/">← home</a><h2>Historical analysis</h2><p class="sub">Loading past events…</p></div>`)
+    el(`<div class="wrap"><a class="back" href="#/">← home</a><h2>${title}</h2><p class="sub">Loading past events…</p></div>`)
   );
   const { events, scoresByEvent } = await loadAllEventsWithScores();
   if (isStale(myToken)) return;
@@ -1580,21 +1586,19 @@ async function renderHistory() {
   const seriesOf = (e) => String(e.name || "").replace(/\s*\b(19|20)\d{2}\b.*$/, "").trim() || String(e.name || e.id);
   const seriesList = [...new Set(hist.map(seriesOf))].sort();
   let series = "__all__";
-  let tab = "events";
+  let tab = mode === "restaurants" ? "restaurants" : "events";
   let pSortK = "avgScore"; // participants table sort column
   let pSortDir = -1; // -1 desc (high→low), +1 asc
   const idByName = {}; // event name -> id (for winner lookup)
   hist.forEach((e) => (idByName[e.name] = e.id));
 
+  const isParts = tab === "restaurants";
   const c = el(`<div class="wrap history">
     <a class="back" href="#/">← home</a>
-    <h2>Historical analysis</h2>
+    <h2>${isParts ? "Participant history" : "Event history"}</h2>
     <p class="sub" id="hsub"></p>
     <div class="rcontrols">
-      <div class="tabs">
-        <button class="tab active" data-tab="events">Events</button>
-        <button class="tab" data-tab="restaurants">Participants</button>
-      </div>
+      <a class="switchlink" href="#/${isParts ? "history" : "participants"}">${isParts ? "🏆 Event history" : "👥 Participant history"} →</a>
       <label class="serieslbl">Event type
         <select id="seriesSel">
           <option value="__all__">All event types</option>
@@ -1605,13 +1609,6 @@ async function renderHistory() {
     <div id="hhost"></div>
   </div>`);
   const host = $("#hhost", c);
-  c.querySelectorAll(".tab").forEach((t) => {
-    t.onclick = () => {
-      tab = t.dataset.tab;
-      c.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === t));
-      draw();
-    };
-  });
   $("#seriesSel", c).onchange = (e) => {
     series = e.target.value;
     draw();
