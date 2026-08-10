@@ -201,13 +201,28 @@ export function restaurantHistory(events, scoresByEvent) {
       const val = officialVal(row, method);
       if (!(val > 0)) continue; // only dishes that were actually judged
       const key = row.name || row.code;
-      (byName[key] = byName[key] || { name: key, apps: [] }).apps.push({
+      (byName[key] = byName[key] || { name: key, apps: [], rawSum: 0, rawN: 0 }).apps.push({
         event: ev.name || ev.id,
         eventId: ev.id,
         place: row.place,
         field,
-        perJudge: round2(val / Math.max(1, row.judgeCount)), // comparable across events
+        perJudge: round2(val / Math.max(1, row.judgeCount)), // scaled points, per judge
       });
+    }
+    // Pooled raw 1–5 average: every actual criterion rating this participant received,
+    // regardless of the event's method or weighting — so it's comparable across events.
+    // Excludes absent-judge 0 placeholders (0 is never a real ballot value).
+    const teamName = Object.fromEntries((ev.teams || []).map((t) => [String(t.code), t.name || t.code]));
+    for (const s of scores) {
+      const key = teamName[String(s.teamCode)];
+      if (!key) continue;
+      const b = (byName[key] = byName[key] || { name: key, apps: [], rawSum: 0, rawN: 0 });
+      for (const v of Object.values(s.criterionScores || {})) {
+        if (typeof v === "number" && v > 0) {
+          b.rawSum += v;
+          b.rawN += 1;
+        }
+      }
     }
   }
   return Object.values(byName)
@@ -220,7 +235,7 @@ export function restaurantHistory(events, scoresByEvent) {
         podiums: r.apps.filter((a) => a.place <= 3).length,
         bestPlace: Math.min(...places),
         avgPlace: round2(mean(places)),
-        avgScore: round2(mean(r.apps.map((a) => a.perJudge))),
+        avgScore: round2(r.rawN ? r.rawSum / r.rawN : 0), // plain 1–5 mean, cross-event comparable
         apps: r.apps.sort((a, b) => String(a.event).localeCompare(String(b.event))),
       };
     })

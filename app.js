@@ -1656,10 +1656,13 @@ async function renderHistory() {
         )
         .join("");
       const node = el(`<div>
+        <div class="scoreblurb">
+          <b>How scoring works.</b> Every judge rates each dish <b>1–5</b> on each criterion. An event's winner is set by its <em>official method</em>: <b>Scaled</b> (all judges' scores, each criterion weighted) or <b>Min-Max</b> (same, but each dish's single highest and lowest judge scores are dropped first). Those totals live on their scale and aren't comparable between events. The <b>Avg score</b> column below sidesteps that — it's the plain average of every 1–5 rating a participant received, so it reads the same across all events regardless of method or weighting.
+        </div>
         <div class="board"><table>
-          <thead><tr><th>#</th><th>Participant</th><th>Apps</th><th>Wins</th><th>Top 3</th><th>Best</th><th>Avg place</th><th>Avg score</th></tr></thead>
+          <thead><tr><th>#</th><th>Participant</th><th>Apps</th><th>Wins</th><th>Top 3</th><th>Best</th><th>Avg place</th><th>Avg (1–5)</th></tr></thead>
           <tbody>${rows}</tbody></table></div>
-          <p class="tienote">Tap a participant for their profile · “Apps” = events entered · “Avg score” = points per judge (0–36), comparable across events.</p>
+          <p class="tienote">Tap a participant for their profile · “Apps” = events entered · “Avg (1–5)” = mean of every judge × criterion rating.</p>
         </div>`);
       node.querySelectorAll(".clickrow").forEach((tr) => {
         tr.onclick = () => showParticipant(tr.dataset.name);

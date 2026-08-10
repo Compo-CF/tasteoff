@@ -208,6 +208,9 @@ input, select {
 .board tr.first .pl { color: var(--brand-2); }
 .board .pl .tie { color: var(--brand-2); font-size: 11px; margin-left: 2px; vertical-align: super; }
 .tienote { color: var(--muted); font-size: 12px; margin-top: 8px; }
+.scoreblurb { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--brand); border-radius: 0 var(--radius) var(--radius) 0; padding: 12px 14px; margin-bottom: 12px; font-size: 13px; line-height: 1.5; color: var(--muted); box-shadow: var(--shadow); }
+.scoreblurb b { color: var(--ink); }
+.scoreblurb em { font-style: italic; color: var(--ink); }
 
 /* results tabs */
 .rcontrols { flex-wrap: wrap; gap: 8px; }
