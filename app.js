@@ -225,7 +225,6 @@ function renderLanding() {
         <a class="enterbtn" href="#/menu">Enter tasteoff →</a>
         <a class="demo-link" href="#/judge?event=demo&table=A">or try the demo (no setup) →</a>
       </div>
-      <p class="foot">Add to Home Screen to use it like an app.</p>
     </div>`)
   );
 }
