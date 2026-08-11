@@ -199,8 +199,7 @@ const BRAND_SVG = `<svg class="brandsvg" viewBox="0 0 350 128" role="img" aria-l
 
 // ---------- LANDING (intro shown before the menu) ----------
 function renderLanding() {
-  app().replaceChildren(
-    el(`
+  const node = el(`
     <div class="wrap landing">
       ${BRAND_SVG}
       <p class="tag">Digital scorecards for food competitions — score live, from any device.</p>
@@ -229,8 +228,29 @@ function renderLanding() {
         </div>
         <a class="primary" href="mailto:anthony@subtlefoodie.com?subject=Food%20competition%20judging%20inquiry">Contact us →</a>
       </div>
-    </div>`)
+      <p class="lcopy">© ${new Date().getFullYear()} tasteoff, a subtlefoodie project. All rights reserved.</p>
+    </div>`);
+  node.querySelectorAll(".lsamplegrid img").forEach((img) => {
+    img.addEventListener("click", () => openLightbox(img.getAttribute("src"), img.getAttribute("alt")));
+  });
+  app().replaceChildren(node);
+}
+
+// Full-screen image viewer for the sample graphics.
+function openLightbox(src, alt) {
+  const ov = el(
+    `<div class="lightbox"><button class="lbclose" aria-label="Close">✕</button><img src="${esc(src)}" alt="${esc(alt || "")}"></div>`
   );
+  const close = () => {
+    ov.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") close();
+  };
+  ov.addEventListener("click", close);
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(ov);
 }
 
 // ---------- HOME (menu hub) ----------
