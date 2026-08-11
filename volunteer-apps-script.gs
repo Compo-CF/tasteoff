@@ -1,13 +1,15 @@
 /**
  * Volunteer form + tracking backend (Google Apps Script, bound to the sheet).
  *
- *   doPost()  — each signup is logged to "Volunteer Signups" AND added to "Check-in".
+ *   doPost()  — each signup is logged to "Volunteer Signups".
  *   doGet()   — returns candidate names (JSONP) for the form's dropdown.
+ *   onOpen()  — adds a "Volunteer Tools" menu; run "Generate Check-in list…" once
+ *               signups are in to build the day-of Check-in tab.
  *   onEdit()  — ticking a "Checked in" box on the Check-in tab auto-stamps the time.
- *   onOpen()  — adds a "Volunteer Tools" menu to rebuild the Check-in list per event.
  *
- * This sheet is reusable across events: every row carries an Event column, so you can
- * sort/filter by event and rebuild the day-of Check-in list for whichever event you want.
+ * NON-DESTRUCTIVE: your existing "Volunteer Signups" columns/data stay put. The new
+ * "Event" column is added at the END and existing rows are backfilled automatically
+ * on the next signup. Reusable across events — every row carries an Event tag.
  *
  * DEPLOY / UPDATE
  *   - Paste this whole file into Extensions > Apps Script (replace everything), Ctrl+S.
@@ -24,8 +26,11 @@ var EVENT_FALLBACK = "houbbq-throwdown-2026"; // used if a submission doesn't se
 // Candidate names: column A = Last name, column B = First name. Shown as "First Last".
 // =================================================
 
-var SIGNUP_HEADER = ["Timestamp", "Event", "Name", "Email", "Phone", "Availability", "Roles", "T-shirt", "Notes", "Added new name"];
+// Event is LAST so it can be appended to an existing sheet without shifting old columns.
+var SIGNUP_HEADER = ["Timestamp", "Name", "Email", "Phone", "Availability", "Roles", "T-shirt", "Notes", "Added new name", "Event"];
 var CHECKIN_HEADER = ["Name", "Phone", "Roles", "T-shirt", "Event", "Checked in", "Checked in at"];
+// Signups column positions (0-based) used when building the Check-in list:
+var SI = { name: 1, phone: 3, roles: 5, shirt: 6, event: 9 };
 
 function doPost(e) {
   try {
@@ -34,15 +39,12 @@ function doPost(e) {
     var ev = data.event || EVENT_FALLBACK;
 
     var log = getOrCreate(ss, SIGNUP_TAB, SIGNUP_HEADER);
+    ensureEventColumn(log, ev); // one-time migrate: add Event col + backfill old rows
     log.appendRow([
-      new Date(), ev, data.name || "", data.email || "", data.phone || "",
+      new Date(), data.name || "", data.email || "", data.phone || "",
       (data.availability || []).join(", "), (data.roles || []).join(", "),
-      data.shirt || "", data.notes || "", data.addedNewName ? "yes" : ""
+      data.shirt || "", data.notes || "", data.addedNewName ? "yes" : "", ev
     ]);
-
-    var chk = getOrCreate(ss, CHECKIN_TAB, CHECKIN_HEADER);
-    chk.appendRow([data.name || "", data.phone || "", (data.roles || []).join(", "), data.shirt || "", ev, false, ""]);
-    chk.getRange(chk.getLastRow(), 6).insertCheckboxes();
 
     return json({ ok: true });
   } catch (err) {
@@ -70,7 +72,7 @@ function onEdit(e) {
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("Volunteer Tools")
-    .addItem("Rebuild Check-in list…", "rebuildCheckin")
+    .addItem("Generate Check-in list…", "rebuildCheckin")
     .addToUi();
 }
 
@@ -80,8 +82,9 @@ function rebuildCheckin() {
   var ui = SpreadsheetApp.getUi();
   var src = ss.getSheetByName(SIGNUP_TAB);
   if (!src) { ui.alert("No '" + SIGNUP_TAB + "' tab yet."); return; }
+  ensureEventColumn(src, EVENT_FALLBACK);
 
-  var resp = ui.prompt("Rebuild Check-in", "Event to include (leave blank for ALL events):", ui.ButtonSet.OK_CANCEL);
+  var resp = ui.prompt("Generate Check-in list", "Event to include (leave blank for ALL events):", ui.ButtonSet.OK_CANCEL);
   if (resp.getSelectedButton() !== ui.Button.OK) return;
   var filter = resp.getResponseText().trim().toLowerCase();
 
@@ -89,19 +92,34 @@ function rebuildCheckin() {
   if (old) ss.deleteSheet(old);
   var sh = getOrCreate(ss, CHECKIN_TAB, CHECKIN_HEADER);
 
-  var v = src.getDataRange().getValues(); // [Timestamp, Event, Name, Email, Phone, Availability, Roles, T-shirt, Notes, Added]
+  var v = src.getDataRange().getValues();
   var rows = [];
   for (var i = 1; i < v.length; i++) {
     var r = v[i];
-    var ev = String(r[1] || "");
+    var ev = String(r[SI.event] || "");
     if (filter && ev.toLowerCase().indexOf(filter) === -1) continue;
-    rows.push([r[2] || "", r[4] || "", r[6] || "", r[7] || "", ev, false, ""]); // Name, Phone, Roles, T-shirt, Event
+    rows.push([r[SI.name] || "", r[SI.phone] || "", r[SI.roles] || "", r[SI.shirt] || "", ev, false, ""]);
   }
   if (rows.length) {
     sh.getRange(2, 1, rows.length, CHECKIN_HEADER.length).setValues(rows);
     sh.getRange(2, 6, rows.length, 1).insertCheckboxes();
   }
-  ui.alert("Check-in rebuilt: " + rows.length + " volunteer(s)" + (filter ? " for \"" + filter + "\"" : "") + ".");
+  ui.alert("Check-in list generated: " + rows.length + " volunteer(s)" + (filter ? " for \"" + filter + "\"" : "") + ".");
+}
+
+// If the signups sheet predates the Event column, add it at the end and backfill.
+function ensureEventColumn(sh, ev) {
+  var lastCol = sh.getLastColumn();
+  var header = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim().toLowerCase(); });
+  if (header.indexOf("event") !== -1) return; // already has it
+  var col = SI.event + 1; // 1-based target column (10)
+  sh.getRange(1, col).setValue("Event").setFontWeight("bold");
+  var lastRow = sh.getLastRow();
+  if (lastRow > 1) {
+    var fill = [];
+    for (var i = 0; i < lastRow - 1; i++) fill.push([ev]);
+    sh.getRange(2, col, lastRow - 1, 1).setValues(fill);
+  }
 }
 
 function getCandidateNames() {
