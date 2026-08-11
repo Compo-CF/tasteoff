@@ -177,6 +177,7 @@ async function render() {
   if (path === "/history") return renderHistory("events");
   if (path === "/participants") return renderHistory("restaurants");
   if (path === "/runner") return renderRunner();
+  if (path === "/checklist") return renderChecklist();
   if (path === "/menu") return renderHome();
   return renderLanding();
 }
@@ -241,6 +242,10 @@ function renderHome() {
           <div class="ci">⚙️</div><h3>Set up event</h3>
           <p>Criteria, judges, teams, codes.</p>
         </a>
+        <a class="card checklist" href="#/checklist">
+          <div class="ci">✅</div><h3>Event checklist</h3>
+          <p>Everything you need to run judging.</p>
+        </a>
         <a class="card judgesdb" href="#/judges">
           <div class="ci">📊</div><h3>Judge database</h3>
           <p>How your judges behave over time.</p>
@@ -270,6 +275,136 @@ function renderHome() {
     const sub = card.querySelector("#judgeSub");
     if (sub) sub.textContent = "Score the dishes at your table.";
   });
+}
+
+// ---------- CHECKLIST (event readiness) ----------
+// Reads the active event and reports, requirement by requirement, what's ready
+// and what's still missing before you can run judging.
+function renderChecklist() {
+  const myToken = renderToken;
+  const eventId = LS.activeEvent();
+  app().replaceChildren(
+    el(`<div class="wrap"><a class="back" href="#/menu">← home</a>
+      <h2>Event checklist</h2><p class="sub">Loading “${esc(eventId)}”…</p></div>`)
+  );
+  loadEvent(eventId).then((ev) => {
+    if (isStale(myToken)) return;
+    app().replaceChildren(buildChecklistView(ev, eventId));
+  });
+}
+
+function buildChecklistView(ev, eventId) {
+  const crit = (ev && ev.criteria) || [];
+  const teams = (ev && ev.teams) || [];
+  const judges = (ev && ev.judges) || [];
+  const wsum = Math.round(crit.reduce((a, c) => a + (c.weight || 0), 0) * 100);
+  const unnamed = teams.filter((t) => !(t.name && t.name.trim())).length;
+  const coded = teams.filter((t) => t.code && String(t.code).trim());
+  const codeVals = coded.map((t) => String(t.code).trim());
+  const dupes = codeVals.filter((c, i) => codeVals.indexOf(c) !== i);
+  const tablesUsed = [...new Set(teams.map((t) => t.table || "A"))].sort();
+  const jByTable = (t) => judges.filter((j) => (j.table || "A") === t).length;
+  const thinTable = tablesUsed.filter((t) => jByTable(t) < 3);
+  const pc = ev && ev.awards && ev.awards.peoples && ev.awards.peoples.enabled;
+
+  // status: "ok" | "warn" | "todo"; `req` marks items that gate readiness.
+  const items = [
+    {
+      req: true,
+      title: "Event name",
+      status: ev && ev.name ? "ok" : "todo",
+      detail: ev && ev.name ? esc(ev.name) : "Give the event a name in Set up event.",
+    },
+    {
+      req: true,
+      title: "Scoring criteria & weights",
+      status: !crit.length ? "todo" : wsum === 100 ? "ok" : "warn",
+      detail: !crit.length
+        ? "Add the criteria dishes are judged on (e.g. Flavor, Texture, Appearance) — or load an event-type template."
+        : `${crit.length} criteria · weights total ${wsum}%` + (wsum === 100 ? "" : " (should total 100%)"),
+    },
+    {
+      req: true,
+      title: "Restaurants / teams",
+      status: teams.length < 2 ? (teams.length ? "warn" : "todo") : unnamed ? "warn" : "ok",
+      detail: !teams.length
+        ? "Add the competing restaurants/dishes (their names stay hidden from judges)."
+        : `${teams.length} entered` + (unnamed ? ` · ${unnamed} missing a name` : "") + (teams.length < 2 ? " · add at least 2" : ""),
+    },
+    {
+      req: true,
+      title: "Blind codes",
+      status: !teams.length ? "todo" : coded.length < teams.length || dupes.length ? "warn" : "ok",
+      detail: !teams.length
+        ? "Each team needs a unique code — judges score the code, never the name."
+        : dupes.length
+        ? `Duplicate codes: ${esc([...new Set(dupes)].join(", "))} — codes must be unique`
+        : coded.length < teams.length
+        ? `${teams.length - coded.length} team(s) still need a code — use “Auto-fill codes”.`
+        : `All ${teams.length} teams coded & unique`,
+    },
+    {
+      req: true,
+      title: "Judges",
+      status: !judges.length ? "todo" : thinTable.length ? "warn" : "ok",
+      detail: !judges.length
+        ? "Add your panel and assign each judge to a table."
+        : `${judges.length} judge(s)` +
+          (tablesUsed.length > 1 ? ` · ${tablesUsed.map((t) => `Table ${t}: ${jByTable(t)}`).join(" · ")}` : "") +
+          (thinTable.length ? ` · 3+ per table recommended (Min-Max drops a high & low)` : ""),
+    },
+    {
+      req: false,
+      title: "People's Choice (optional)",
+      status: pc ? "ok" : "todo",
+      detail: pc
+        ? `On · “${esc((ev.awards.peoples.unit || "Coins"))}”, top ${ev.awards.peoples.topN || 2}`
+        : "Off — turn on in Set up event if you want a crowd vote alongside the judges.",
+    },
+  ];
+
+  const reqItems = items.filter((i) => i.req);
+  const readyN = reqItems.filter((i) => i.status === "ok").length;
+  const allReady = readyN === reqItems.length;
+  const judgingOpen = ev && ev.judgingOpen === true;
+
+  const c = el(`<div class="wrap checklist">
+    <a class="back" href="#/menu">← home</a>
+    <h2>Event checklist</h2>
+    <p class="sub">What you need in place to run judging${ev && ev.name ? ` for <b>${esc(ev.name)}</b>` : ""}.</p>
+    <div class="cksum ${allReady ? "ready" : "notready"}">
+      <span class="ckbadge">${readyN}/${reqItems.length}</span>
+      <span>${allReady ? "All essentials ready — you can open judging." : "requirements ready"}</span>
+    </div>
+    <div class="ckitems"></div>
+    <div class="ckgo ${judgingOpen ? "live" : ""}">
+      <div class="ci">${judgingOpen ? "🟢" : allReady ? "▶️" : "⏳"}</div>
+      <div>
+        <h3>${judgingOpen ? "Judging is OPEN" : "Open judging"}</h3>
+        <p>${
+          judgingOpen
+            ? "Judges can score now. Close it from Set up event when you're done."
+            : allReady
+            ? "Everything's ready — hit “Start judging” in Set up event to let judges in."
+            : "Finish the essentials above first, then start judging in Set up event."
+        }</p>
+      </div>
+      <a class="switchlink" href="#/admin">Set up event →</a>
+    </div>
+    <p class="foot">Tip: import a spreadsheet in Set up event to fill teams, judges &amp; criteria at once.</p>
+  </div>`);
+
+  const box = $(".ckitems", c);
+  const icon = { ok: "✓", warn: "!", todo: "○" };
+  items.forEach((it) => {
+    const row = el(`<a class="ckrow ${it.status}" href="#/admin">
+      <span class="ckmark ${it.status}">${icon[it.status]}</span>
+      <span class="cktext"><b>${esc(it.title)}</b><span class="ckdetail">${it.detail}</span></span>
+      <span class="ckedit">edit ›</span>
+    </a>`);
+    box.appendChild(row);
+  });
+  return c;
 }
 
 // ---------- ADMIN ----------
