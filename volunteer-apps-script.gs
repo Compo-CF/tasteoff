@@ -1,54 +1,49 @@
 /**
- * HouBBQ Throwdown volunteer form — Google Apps Script backend.
+ * Volunteer form + tracking backend (Google Apps Script, bound to the sheet).
  *
- * WHAT IT DOES
- *   - doPost(): appends each form submission as a new row in a "Volunteer Signups" tab.
- *   - doGet():  returns the known volunteer names (from your candidate tab) so the
- *               form's dropdown can list them. Uses JSONP (?callback=) to avoid CORS.
+ *   doPost()  — each signup is logged to "Volunteer Signups" AND added to "Check-in".
+ *   doGet()   — returns candidate names (JSONP) for the form's dropdown.
+ *   onEdit()  — ticking a "Checked in" box on the Check-in tab auto-stamps the time.
+ *   onOpen()  — adds a "Volunteer Tools" menu to rebuild the Check-in list per event.
  *
- * SETUP (one time)
- *   1. Open your Google Sheet (the one with the volunteer candidates).
- *   2. Extensions > Apps Script. Delete anything there and paste ALL of this file.
- *   3. Adjust the CONFIG constants below if your candidate tab/column differ.
- *   4. Click Deploy > New deployment > type: Web app.
- *        - Description: volunteer form
- *        - Execute as: Me
- *        - Who has access: Anyone
- *      Deploy, authorize when prompted, and COPY the Web app URL (ends in /exec).
- *   5. Paste that URL into volunteer.html as the ENDPOINT value (or send it to me).
- *   If you change this script later, redeploy: Deploy > Manage deployments >
- *   edit > Version: New version > Deploy (the /exec URL stays the same).
+ * This sheet is reusable across events: every row carries an Event column, so you can
+ * sort/filter by event and rebuild the day-of Check-in list for whichever event you want.
+ *
+ * DEPLOY / UPDATE
+ *   - Paste this whole file into Extensions > Apps Script (replace everything), Ctrl+S.
+ *   - Deploy > Manage deployments > edit the deployment > Version: New version > Deploy.
+ *     (Execute as: Me, Who has access: Anyone. The /exec URL stays the same.)
+ *   - Reload the spreadsheet once so the "Volunteer Tools" menu appears.
  */
 
 // ===================== CONFIG =====================
-var SIGNUP_TAB = "Volunteer Signups";   // tab the form writes to (created if missing)
-var CANDIDATE_TAB_INDEX = 0;            // which existing tab holds your candidate list (0 = first tab)
-// Candidate names come from the candidate tab: column A = Last name, column B = First name.
-// The dropdown shows them as "First Last".
+var SIGNUP_TAB = "Volunteer Signups";  // full log (one row per submission)
+var CHECKIN_TAB = "Check-in";          // day-of check-in list (checkbox + time)
+var CANDIDATE_TAB_INDEX = 0;           // tab holding your candidate list (0 = first tab)
+var EVENT_FALLBACK = "houbbq-throwdown-2026"; // used if a submission doesn't send an event
+// Candidate names: column A = Last name, column B = First name. Shown as "First Last".
 // =================================================
+
+var SIGNUP_HEADER = ["Timestamp", "Event", "Name", "Email", "Phone", "Availability", "Roles", "T-shirt", "Notes", "Added new name"];
+var CHECKIN_HEADER = ["Name", "Phone", "Roles", "T-shirt", "Event", "Checked in", "Checked in at"];
 
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sh = ss.getSheetByName(SIGNUP_TAB);
-    if (!sh) {
-      sh = ss.insertSheet(SIGNUP_TAB);
-      sh.appendRow(["Timestamp", "Name", "Email", "Phone", "Availability", "Roles", "T-shirt", "Notes", "Added new name"]);
-      sh.getRange(1, 1, 1, 9).setFontWeight("bold");
-      sh.setFrozenRows(1);
-    }
-    sh.appendRow([
-      new Date(),
-      data.name || "",
-      data.email || "",
-      data.phone || "",
-      (data.availability || []).join(", "),
-      (data.roles || []).join(", "),
-      data.shirt || "",
-      data.notes || "",
-      data.addedNewName ? "yes" : ""
+    var ev = data.event || EVENT_FALLBACK;
+
+    var log = getOrCreate(ss, SIGNUP_TAB, SIGNUP_HEADER);
+    log.appendRow([
+      new Date(), ev, data.name || "", data.email || "", data.phone || "",
+      (data.availability || []).join(", "), (data.roles || []).join(", "),
+      data.shirt || "", data.notes || "", data.addedNewName ? "yes" : ""
     ]);
+
+    var chk = getOrCreate(ss, CHECKIN_TAB, CHECKIN_HEADER);
+    chk.appendRow([data.name || "", data.phone || "", (data.roles || []).join(", "), data.shirt || "", ev, false, ""]);
+    chk.getRange(chk.getLastRow(), 6).insertCheckboxes();
+
     return json({ ok: true });
   } catch (err) {
     return json({ ok: false, error: String(err) });
@@ -56,14 +51,57 @@ function doPost(e) {
 }
 
 function doGet(e) {
-  var names = getCandidateNames();
-  var body = JSON.stringify({ names: names });
+  var body = JSON.stringify({ names: getCandidateNames() });
   var cb = e && e.parameter && e.parameter.callback;
-  if (cb) {
-    return ContentService.createTextOutput(cb + "(" + body + ")")
-      .setMimeType(ContentService.MimeType.JAVASCRIPT);
-  }
+  if (cb) return ContentService.createTextOutput(cb + "(" + body + ")").setMimeType(ContentService.MimeType.JAVASCRIPT);
   return ContentService.createTextOutput(body).setMimeType(ContentService.MimeType.JSON);
+}
+
+// Auto-stamp the check-in time when the "Checked in" box is ticked (simple trigger).
+function onEdit(e) {
+  try {
+    var sh = e.range.getSheet();
+    if (sh.getName() !== CHECKIN_TAB) return;
+    if (e.range.getColumn() !== 6 || e.range.getRow() < 2) return; // col F = "Checked in"
+    sh.getRange(e.range.getRow(), 7).setValue(e.range.getValue() === true ? new Date() : "");
+  } catch (err) { /* ignore */ }
+}
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu("Volunteer Tools")
+    .addItem("Rebuild Check-in list…", "rebuildCheckin")
+    .addToUi();
+}
+
+// Rebuild the Check-in tab from the signups log — optionally filtered to one event.
+function rebuildCheckin() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+  var src = ss.getSheetByName(SIGNUP_TAB);
+  if (!src) { ui.alert("No '" + SIGNUP_TAB + "' tab yet."); return; }
+
+  var resp = ui.prompt("Rebuild Check-in", "Event to include (leave blank for ALL events):", ui.ButtonSet.OK_CANCEL);
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+  var filter = resp.getResponseText().trim().toLowerCase();
+
+  var old = ss.getSheetByName(CHECKIN_TAB);
+  if (old) ss.deleteSheet(old);
+  var sh = getOrCreate(ss, CHECKIN_TAB, CHECKIN_HEADER);
+
+  var v = src.getDataRange().getValues(); // [Timestamp, Event, Name, Email, Phone, Availability, Roles, T-shirt, Notes, Added]
+  var rows = [];
+  for (var i = 1; i < v.length; i++) {
+    var r = v[i];
+    var ev = String(r[1] || "");
+    if (filter && ev.toLowerCase().indexOf(filter) === -1) continue;
+    rows.push([r[2] || "", r[4] || "", r[6] || "", r[7] || "", ev, false, ""]); // Name, Phone, Roles, T-shirt, Event
+  }
+  if (rows.length) {
+    sh.getRange(2, 1, rows.length, CHECKIN_HEADER.length).setValues(rows);
+    sh.getRange(2, 6, rows.length, 1).insertCheckboxes();
+  }
+  ui.alert("Check-in rebuilt: " + rows.length + " volunteer(s)" + (filter ? " for \"" + filter + "\"" : "") + ".");
 }
 
 function getCandidateNames() {
@@ -73,7 +111,6 @@ function getCandidateNames() {
   var values = sh.getDataRange().getValues();
   if (!values.length) return [];
   // Column A = Last name, Column B = First name. Show as "First Last".
-  // Skip row 1 only if it looks like a header row.
   var a0 = String(values[0][0] || "").toLowerCase();
   var b0 = String(values[0][1] || "").toLowerCase();
   var start = (/name|last|first/.test(a0) || /name|first|last/.test(b0)) ? 1 : 0;
@@ -90,7 +127,18 @@ function getCandidateNames() {
   return out;
 }
 
+// Get a tab by name, creating it with a bold, frozen header row if missing.
+function getOrCreate(ss, name, header) {
+  var sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.appendRow(header);
+    sh.getRange(1, 1, 1, header.length).setFontWeight("bold");
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
 function json(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
