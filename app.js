@@ -214,6 +214,14 @@ function renderLanding() {
       <div class="lfeat">
         <span>🔒 Blind coding</span><span>⚖️ Weighted 1–5</span><span>🥇 No ties, ever</span><span>📊 Analytics</span>
       </div>
+      <div class="lsamples">
+        <h2 class="lsamplehead">See it in action</h2>
+        <div class="lsamplegrid">
+          <img src="samples/ballot.png" alt="Sample blind ballot — what each judge sees" loading="lazy">
+          <img src="samples/results.png" alt="Sample results leaderboard" loading="lazy">
+          <img src="samples/analytics.png" alt="Sample judge & dish analytics" loading="lazy">
+        </div>
+      </div>
       <div class="lservice">
         <div class="lservicetxt">
           <h3>Have an event? Let us coordinate the judging.</h3>
@@ -222,8 +230,7 @@ function renderLanding() {
         <a class="primary" href="mailto:anthony@subtlefoodie.com?subject=Food%20competition%20judging%20inquiry">Contact us →</a>
       </div>
       <div class="lcta">
-        <a class="enterbtn" href="#/menu">Enter tasteoff →</a>
-        <a class="demo-link" href="#/judge?event=demo&table=A">or try the demo (no setup) →</a>
+        <a class="demo-link" href="#/judge?event=demo&table=A">Try the demo (no setup) →</a>
       </div>
     </div>`)
   );
