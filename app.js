@@ -218,6 +218,13 @@ function renderLanding() {
       <div class="lfeat">
         <span>🔒 Blind coding</span><span>⚖️ Weighted 1–5</span><span>🥇 No ties, ever</span><span>📊 Analytics</span>
       </div>
+      <div class="lservice">
+        <div class="lservicetxt">
+          <h3>Want us to run the judging for you?</h3>
+          <p>A done-for-you service — blind panels, dream-team advice, live results. Contact for details &amp; pricing.</p>
+        </div>
+        <a class="primary" href="mailto:anthony@subtlefoodie.com?subject=Food%20competition%20judging%20inquiry">Contact us →</a>
+      </div>
       <p class="foot">Add to Home Screen to use it like an app.</p>
     </div>`)
   );
