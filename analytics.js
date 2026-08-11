@@ -183,6 +183,9 @@ export function eventsOverview(events, scoresByEvent) {
       judges: (ev.judges || []).length,
       ballots: scores.length,
       winner: winner ? winner.name || winner.code : "—",
+      // Officially announced winner, when it differs from the computed leader
+      // (e.g. a hand-decided result on a near-tie). Purely a note; scoring is unchanged.
+      publishedWinner: ev.publishedWinner || null,
       method: methodOf(ev) === "minmax" ? "Min-Max" : "Scaled",
       fieldAvg: round2(mean(flat.map((f) => f.value))),
     };

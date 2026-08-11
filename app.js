@@ -1680,7 +1680,11 @@ async function renderHistory(mode) {
             <td class="tb">${e.judges}</td>
             <td class="tb">${e.ballots}</td>
             <td class="sc">${e.fieldAvg}</td>
-            <td>🏆 ${esc(e.winner)}</td>
+            <td>🏆 ${esc(e.winner)}${
+              e.publishedWinner && esc(e.publishedWinner) !== esc(e.winner)
+                ? `<div class="pubwin">published: ${esc(e.publishedWinner)}</div>`
+                : ""
+            }</td>
           </tr>`
         )
         .join("");
@@ -1754,9 +1758,13 @@ async function renderHistory(mode) {
         (d) => `<tr><td>${esc(d.short)}</td><td class="sc">${d.winnerAvg}</td><td class="sc">${d.fieldAvg}</td><td class="sc ${d.delta >= 0 ? "pos" : "neg"}">${d.delta > 0 ? "+" : ""}${d.delta}</td></tr>`
       )
       .join("");
+    const pub = ev.publishedWinner && ev.publishedWinner !== w.winner
+      ? `<p class="pubnote">🏅 Published/announced winner: <b>${esc(ev.publishedWinner)}</b> — the officially awarded champion. It differs from the score-computed leader below (a hand-decided result on a near-tie); the scoring here is shown as computed.</p>`
+      : "";
     const ov = el(`<div class="modal-ov"><div class="modal wide">
       <div class="dd-head"><h3>🏆 ${esc(w.winner)}</h3><button class="mini" id="wClose">close</button></div>
       <p class="sub">${esc(ev.name)} · winner (${esc(w.method)})</p>
+      ${pub}
       <p class="whytext">${esc(w.summary)}</p>
       <h4>Winner vs. field, by criterion</h4>
       <table class="dd-judges"><thead><tr><th>Criterion</th><th>Winner</th><th>Field</th><th>Δ</th></tr></thead><tbody>${critRows}</tbody></table>

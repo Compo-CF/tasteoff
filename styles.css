@@ -219,6 +219,9 @@ input, select {
 .board th[data-k] { cursor: pointer; user-select: none; white-space: nowrap; }
 .board th[data-k]:hover { color: var(--ink); }
 .board th[data-k]::after { content: attr(data-arrow); font-size: 9px; color: var(--brand); }
+.pubwin { font-size: 11px; color: var(--brand-2); font-style: italic; margin-top: 2px; }
+.pubnote { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; font-size: 13px; line-height: 1.4; color: var(--ink); margin: 4px 0 10px; }
+.pubnote b { color: var(--brand); }
 
 /* results tabs */
 .rcontrols { flex-wrap: wrap; gap: 8px; }
