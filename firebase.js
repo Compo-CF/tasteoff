@@ -174,6 +174,17 @@ export async function saveEvent(eventId, data) {
   await setDoc(eventRef(eventId), { ...data, updatedAt: serverTimestamp() });
 }
 
+// Open/close judging for an event without touching the rest of the config.
+// Judges can only score while this is true (the "start the event" switch).
+export async function setJudgingOpen(eventId, open) {
+  await authReady;
+  await setDoc(
+    eventRef(eventId),
+    { judgingOpen: !!open, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+}
+
 export function watchEvent(eventId, cb) {
   return onSnapshot(eventRef(eventId), (snap) => {
     cb(snap.exists() ? { id: snap.id, ...snap.data() } : null);

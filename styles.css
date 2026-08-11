@@ -59,6 +59,8 @@ button { font: inherit; cursor: pointer; }
 .switchlink:active { transform: scale(0.97); }
 .foot { margin-top: 28px; color: var(--muted); font-size: 13px; }
 .demo-link { display: inline-block; margin-top: 6px; font-size: 13px; font-weight: 600; }
+.card.disabled { opacity: 0.6; pointer-events: none; cursor: default; filter: grayscale(45%); border-left-color: var(--muted); }
+#judgetoggle.live { background: var(--ok); color: #fff; border-color: var(--ok); }
 
 /* ---- panels / admin ---- */
 .panel {

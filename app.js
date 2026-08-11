@@ -3,6 +3,7 @@ import {
   loadEvent,
   saveEvent,
   saveEventSafe,
+  setJudgingOpen,
   listEvents,
   deleteEvent,
   watchScores,
@@ -198,9 +199,9 @@ function renderHome() {
       </svg>
       <p class="tag">Digital scorecards for food competitions — score live, from any device.</p>
       <div class="cards">
-        <a class="card judge" href="#/judge">
-          <div class="ci">📝</div><h3>I'm a Judge</h3>
-          <p>Score the dishes at your table.</p>
+        <a class="card judge disabled" id="judgeCard" aria-disabled="true">
+          <div class="ci">🔒</div><h3>I'm a Judge</h3>
+          <p id="judgeSub">Judging hasn't started yet.</p>
         </a>
         <a class="card results" href="#/results">
           <div class="ci">🏆</div><h3>Results</h3>
@@ -227,6 +228,18 @@ function renderHome() {
       <a class="demo-link" href="#/judge?event=demo&table=A">Try the demo (no setup) →</a>
     </div>`)
   );
+  // The Judge card stays locked until the organizer opens judging on the active event.
+  loadEvent(LS.activeEvent()).then((ev) => {
+    const card = document.getElementById("judgeCard");
+    if (!card || !ev || ev.judgingOpen !== true) return;
+    card.classList.remove("disabled");
+    card.removeAttribute("aria-disabled");
+    card.setAttribute("href", "#/judge");
+    const ci = card.querySelector(".ci");
+    if (ci) ci.textContent = "📝";
+    const sub = card.querySelector("#judgeSub");
+    if (sub) sub.textContent = "Score the dishes at your table.";
+  });
 }
 
 // ---------- ADMIN ----------
@@ -701,6 +714,7 @@ async function renderAdmin(preloaded) {
   const actions = el(`<div class="actions">
       <button class="primary" id="save">Save event</button>
       <button id="links">Judge links &amp; QR</button>
+      <button id="judgetoggle"></button>
     </div>`);
   const linkbox = el(`<div id="linkbox"></div>`);
   c.appendChild(actions);
@@ -741,6 +755,29 @@ async function renderAdmin(preloaded) {
     }
   };
   $("#links", c).onclick = () => showLinks(ev, $("#linkbox", c));
+
+  // Start/close judging — the switch that unlocks the "I'm a Judge" flow for judges.
+  const jt = $("#judgetoggle", c);
+  const paintToggle = () => {
+    const open = ev.judgingOpen === true;
+    jt.textContent = open ? "■ Close judging" : "▶ Start judging";
+    jt.classList.toggle("live", open);
+    jt.title = open ? "Judging is OPEN — judges can score now" : "Judging is closed — judges are locked out";
+  };
+  paintToggle();
+  jt.onclick = async () => {
+    const next = !(ev.judgingOpen === true);
+    if (next && !(await loadEvent(ev.id))) {
+      alert("Save the event first, then start judging.");
+      return;
+    }
+    jt.disabled = true;
+    await setJudgingOpen(ev.id, next);
+    ev.judgingOpen = next;
+    jt.disabled = false;
+    paintToggle();
+    toast(next ? "Judging is OPEN ✓ — judges can score" : "Judging closed");
+  };
 
   app().replaceChildren(c);
 }
@@ -798,6 +835,15 @@ async function renderJudge(params) {
   if (!ev) {
     app().replaceChildren(
       el(`<div class="wrap"><a class="back" href="#/">← home</a><p class="empty">No event found. Ask the organizer for the link.</p></div>`)
+    );
+    return;
+  }
+  // Judging must be explicitly opened by the organizer before judges can score.
+  if (eventId !== "demo" && ev.judgingOpen !== true) {
+    app().replaceChildren(
+      el(`<div class="wrap"><a class="back" href="#/">← home</a>
+        <h2>${esc(ev.name || "Judging")}</h2>
+        <p class="empty">⏳ Judging hasn't opened yet.<br>The organizer will start it when the event begins.</p></div>`)
     );
     return;
   }
