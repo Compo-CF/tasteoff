@@ -94,9 +94,9 @@
       <label class="chk"><input type="checkbox" name="roles" value="Wherever needed"> Wherever you need me</label>
     </fieldset>
 
-    <label class="field">T-shirt size (optional)
+    <label class="field">T-shirt size <span class="req">*</span>
       <select name="shirt">
-        <option value="">—</option>
+        <option value="">— Select size —</option>
         <option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option>
       </select>
     </label>
@@ -172,8 +172,10 @@
     const name = (sel === "__new__" ? (fd.get("newName") || "") : sel).trim();
     const email = (fd.get("email") || "").trim();
     const phone = (fd.get("phone") || "").trim();
+    const shirt = (fd.get("shirt") || "").trim();
     if (!name) { msg.textContent = "Please select or add your name."; return; }
     if (!email || !phone) { msg.textContent = "Please add your email and phone."; return; }
+    if (!shirt) { msg.textContent = "Please choose a t-shirt size."; return; }
     if (isUnset()) { msg.textContent = "Form isn't connected yet — please try again later."; return; }
 
     sub.disabled = true; sub.textContent = "Submitting…"; msg.textContent = "";
@@ -183,7 +185,7 @@
       addedNewName: sel === "__new__",
       availability: fd.getAll("availability"),
       roles: fd.getAll("roles"),
-      shirt: fd.get("shirt") || "",
+      shirt: shirt,
       notes: (fd.get("notes") || "").trim(),
     };
     try {
