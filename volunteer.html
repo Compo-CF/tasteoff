@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HouBBQ Throwdown — Volunteer Sign-Up</title>
+<meta name="description" content="Volunteer at the HouBBQ Throwdown — sign up to help run Houston's BBQ competition.">
+<style>
+  :root{
+    --bg:#faf7f4; --card:#fff; --ink:#26201d; --muted:#7a706a; --line:#e7ded7;
+    --brand:#b5361f; --brand2:#e08a2c; --ok:#2e7d47; --shadow:0 2px 14px rgba(0,0,0,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#1a1614; --card:#262019; --ink:#f3ece6; --muted:#a99f97; --line:#3a322c; --shadow:0 2px 14px rgba(0,0,0,.4); }
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; line-height:1.5; }
+  .wrap{ max-width:600px; margin:0 auto; padding:22px 16px 56px; }
+  .brand{ font-weight:800; color:var(--brand); letter-spacing:.02em; font-size:15px; }
+  h1{ font-size:clamp(26px,6vw,34px); margin:6px 0 4px; letter-spacing:-.5px; }
+  .lead{ color:var(--muted); margin:0 0 6px; }
+  .meta{ display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 22px; }
+  .meta span{ background:var(--card); border:1px solid var(--line); border-radius:20px; padding:6px 13px; font-size:13px; font-weight:600; }
+  form{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:22px; box-shadow:var(--shadow); }
+  label.field{ display:block; margin-bottom:16px; font-size:13px; font-weight:600; color:var(--muted); }
+  label.field input, label.field select, label.field textarea{
+    display:block; width:100%; margin-top:6px; padding:12px; font-size:16px;
+    border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--ink); font-family:inherit; }
+  textarea{ min-height:84px; resize:vertical; }
+  fieldset{ border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin:0 0 16px; }
+  legend{ font-size:13px; font-weight:700; padding:0 6px; color:var(--ink); }
+  .chk{ display:flex; align-items:flex-start; gap:10px; padding:7px 0; font-size:15px; font-weight:500; color:var(--ink); cursor:pointer; }
+  .chk input{ margin-top:3px; width:18px; height:18px; accent-color:var(--brand); flex:none; }
+  .req{ color:var(--brand); }
+  button{ width:100%; margin-top:4px; background:var(--brand); color:#fff; border:none; border-radius:12px;
+    padding:15px; font-size:17px; font-weight:700; cursor:pointer; }
+  button:disabled{ opacity:.6; cursor:default; }
+  .msg{ margin:12px 0 0; font-size:14px; color:var(--brand); min-height:1px; }
+  .foot{ text-align:center; color:var(--muted); font-size:12.5px; margin-top:22px; }
+  .foot a{ color:var(--muted); }
+  .done{ background:var(--card); border:1px solid var(--ok); border-radius:16px; padding:34px 24px; text-align:center; box-shadow:var(--shadow); }
+  .done .check{ width:58px; height:58px; margin:0 auto 12px; border-radius:50%; background:var(--ok); color:#fff;
+    font-size:30px; display:flex; align-items:center; justify-content:center; }
+  .done h2{ margin:0 0 8px; }
+  .done p{ color:var(--muted); margin:0; }
+  .done a{ color:var(--brand); font-weight:600; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="brand">🔥 HouBBQ Throwdown</div>
+  <h1>Volunteer sign-up</h1>
+  <p class="lead">Help us run Houston's BBQ throwdown — it doesn't happen without volunteers. Tell us how you'd like to pitch in and we'll email you your shift details.</p>
+  <!-- EDIT these to your event's real details before sharing the link -->
+  <div class="meta">
+    <span>📅 Date: to be confirmed</span>
+    <span>📍 Location: to be confirmed</span>
+    <span>⏱️ Shifts available</span>
+  </div>
+
+  <form id="f" novalidate>
+    <label class="field">Full name <span class="req">*</span>
+      <input name="name" autocomplete="name" required>
+    </label>
+    <label class="field">Email <span class="req">*</span>
+      <input type="email" name="email" autocomplete="email" required>
+    </label>
+    <label class="field">Mobile phone <span class="req">*</span>
+      <input type="tel" name="phone" autocomplete="tel" required>
+    </label>
+
+    <fieldset>
+      <legend>When can you help?</legend>
+      <label class="chk"><input type="checkbox" name="availability" value="Setup (morning)"> Setup — morning</label>
+      <label class="chk"><input type="checkbox" name="availability" value="During the event"> During the event</label>
+      <label class="chk"><input type="checkbox" name="availability" value="Teardown (after)"> Teardown — after</label>
+      <label class="chk"><input type="checkbox" name="availability" value="Flexible / all day"> Flexible — I can do all day</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>What would you like to help with?</legend>
+      <label class="chk"><input type="checkbox" name="roles" value="Check-in & registration"> Team check-in &amp; registration</label>
+      <label class="chk"><input type="checkbox" name="roles" value="Dish runner"> Dish runner (ferry dishes to the judges)</label>
+      <label class="chk"><input type="checkbox" name="roles" value="Judging table assistant"> Judging table assistant / scorekeeping</label>
+      <label class="chk"><input type="checkbox" name="roles" value="Setup / teardown crew"> Setup / teardown crew</label>
+      <label class="chk"><input type="checkbox" name="roles" value="People's Choice & tickets"> People's Choice &amp; ticket table</label>
+      <label class="chk"><input type="checkbox" name="roles" value="Wherever needed"> Wherever you need me</label>
+    </fieldset>
+
+    <label class="field">T-shirt size (optional)
+      <select name="shirt">
+        <option value="">—</option>
+        <option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option>
+      </select>
+    </label>
+
+    <label class="field">Anything else? (experience, questions, availability notes)
+      <textarea name="notes"></textarea>
+    </label>
+
+    <button type="submit" id="sub">Sign me up →</button>
+    <p class="msg" id="msg" role="status"></p>
+  </form>
+
+  <div id="done" class="done" hidden>
+    <div class="check">✓</div>
+    <h2>You're on the list!</h2>
+    <p>Thanks for volunteering. We'll email you with your shift details and next steps.<br><br>
+      Questions? <a href="mailto:anthony@subtlefoodie.com">anthony@subtlefoodie.com</a></p>
+  </div>
+
+  <p class="foot">Powered by <b>tasteoff</b> · © <span id="yr"></span> · questions: <a href="mailto:anthony@subtlefoodie.com">anthony@subtlefoodie.com</a></p>
+</main>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBJnKTOwlb7d-OuM2orGZx2Je0X_scJRQw",
+    authDomain: "judging-app-dd929.firebaseapp.com",
+    projectId: "judging-app-dd929",
+    storageBucket: "judging-app-dd929.firebasestorage.app",
+    messagingSenderId: "681684096241",
+    appId: "1:681684096241:web:bf2d195ef62127ca320550",
+  };
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const authReady = new Promise((resolve) => {
+    onAuthStateChanged(auth, (u) => { if (u) resolve(u); });
+    signInAnonymously(auth).catch((e) => console.error("sign-in failed", e));
+  });
+
+  document.getElementById("yr").textContent = new Date().getFullYear();
+
+  const form = document.getElementById("f");
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const sub = document.getElementById("sub");
+    const msg = document.getElementById("msg");
+    const fd = new FormData(form);
+    const name = (fd.get("name") || "").trim();
+    const email = (fd.get("email") || "").trim();
+    const phone = (fd.get("phone") || "").trim();
+    if (!name || !email || !phone) { msg.textContent = "Please add your name, email and phone."; return; }
+
+    sub.disabled = true; sub.textContent = "Submitting…"; msg.textContent = "";
+    try {
+      await authReady;
+      await addDoc(collection(db, "volunteers"), {
+        event: "houbbq-throwdown-2026",
+        name, email, phone,
+        availability: fd.getAll("availability"),
+        roles: fd.getAll("roles"),
+        shirt: fd.get("shirt") || "",
+        notes: (fd.get("notes") || "").trim(),
+        createdAt: serverTimestamp(),
+      });
+      form.hidden = true;
+      document.getElementById("done").hidden = false;
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      console.error(err);
+      sub.disabled = false; sub.textContent = "Sign me up →";
+      msg.textContent = "Sorry — couldn't submit (" + (err.code || err.message) + "). Please try again, or email anthony@subtlefoodie.com.";
+    }
+  });
+</script>
+</body>
+</html>
