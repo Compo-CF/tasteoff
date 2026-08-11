@@ -80,15 +80,14 @@ button { font: inherit; cursor: pointer; }
 .lstep p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.4; }
 .lfeat { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 22px 0 0; }
 .lfeat span { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 7px 14px; font-size: 13px; font-weight: 600; color: var(--ink); }
-.lservice { display: flex; align-items: center; gap: 16px; text-align: left; margin: 30px 0 4px; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); }
-.lservicetxt { flex: 1 1 auto; min-width: 0; }
-.lservice h3 { margin: 0 0 4px; font-size: 17px; }
-.lservice p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.4; }
-.lservice .primary { flex: none; text-decoration: none; white-space: nowrap; padding: 11px 18px; }
-@media (max-width: 560px) {
-  .lservice { flex-direction: column; align-items: stretch; text-align: center; }
-  .lservice .primary { text-align: center; }
-}
+.lservice { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; margin: 30px 0 6px; padding: 24px 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); }
+.lservicetxt { max-width: 460px; }
+.lservice h3 { margin: 0 0 5px; font-size: 18px; }
+.lservice p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.lservice .primary { text-decoration: none; white-space: nowrap; padding: 12px 28px; }
+/* smaller secondary "Enter tasteoff" placed lower on the page */
+.enterbtn { display: inline-block; text-decoration: none; font-size: 14px; font-weight: 700; color: var(--brand); background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 22px; box-shadow: var(--shadow); }
+.enterbtn:active { transform: scale(0.98); }
 @media (max-width: 560px) {
   .lsteps { grid-template-columns: 1fr; }
 }

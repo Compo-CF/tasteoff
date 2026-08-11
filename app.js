@@ -206,10 +206,6 @@ function renderLanding() {
       <p class="tag">Digital scorecards for food competitions — score live, from any device.</p>
       <h1 class="lhero">Run a competition people<br><span>actually trust.</span></h1>
       <p class="llead">tasteoff turns messy paper ballots into blind, weighted, tie-free scoring — with a live leaderboard and post-event analytics. Built for cook-offs, bake-offs, BBQ throwdowns and chef battles.</p>
-      <div class="lcta">
-        <a class="primary big" href="#/menu">Enter tasteoff →</a>
-        <a class="demo-link" href="#/judge?event=demo&table=A">or try the demo (no setup) →</a>
-      </div>
       <div class="lsteps">
         <div class="lstep"><div class="ln">1</div><h3>Set up your event</h3><p>Criteria &amp; weights, judges, teams and blind codes — or import a spreadsheet.</p></div>
         <div class="lstep"><div class="ln">2</div><h3>Judges score blind</h3><p>A code on their phone, 1–5 on each criterion. No names, no bias, works offline.</p></div>
@@ -224,6 +220,10 @@ function renderLanding() {
           <p>Blind panels, dream-team advice, live results — coordinated for you. Contact for details &amp; pricing.</p>
         </div>
         <a class="primary" href="mailto:anthony@subtlefoodie.com?subject=Food%20competition%20judging%20inquiry">Contact us →</a>
+      </div>
+      <div class="lcta">
+        <a class="enterbtn" href="#/menu">Enter tasteoff →</a>
+        <a class="demo-link" href="#/judge?event=demo&table=A">or try the demo (no setup) →</a>
       </div>
       <p class="foot">Add to Home Screen to use it like an app.</p>
     </div>`)
