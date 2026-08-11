@@ -229,9 +229,6 @@ function renderLanding() {
         </div>
         <a class="primary" href="mailto:anthony@subtlefoodie.com?subject=Food%20competition%20judging%20inquiry">Contact us →</a>
       </div>
-      <div class="lcta">
-        <a class="demo-link" href="#/judge?event=demo&table=A">Try the demo (no setup) →</a>
-      </div>
     </div>`)
   );
 }
