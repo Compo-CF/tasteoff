@@ -52,17 +52,23 @@
   <div class="brand">🔥 HouBBQ Throwdown</div>
   <h1>Volunteer sign-up</h1>
   <p class="lead">Help us run Houston's BBQ throwdown — it doesn't happen without volunteers. Tell us how you'd like to pitch in and we'll email you your shift details.</p>
-  <!-- EDIT these to your event's real details before sharing the link -->
   <div class="meta">
-    <span>📅 Date: to be confirmed</span>
-    <span>📍 Location: to be confirmed</span>
-    <span>⏱️ Shifts available</span>
+    <span>📅 Sunday, September 20, 2026</span>
+    <span>📍 Saint Arnold Brewing Co. · 2000 Lyons Ave, Houston, TX 77020</span>
+    <span>⏱️ Arrive no later than 11:00 AM</span>
   </div>
 
   <form id="f" novalidate>
-    <label class="field">Full name <span class="req">*</span>
-      <input name="name" autocomplete="name" required>
+    <label class="field">If you've volunteered before, select your name
+      <select name="nameSelect" id="nameSelect">
+        <option value="">— Select your name —</option>
+        <option value="__new__">First time, or my name isn't in the list</option>
+      </select>
     </label>
+    <label class="field" id="newNameWrap" hidden>If you haven't volunteered before (or aren't listed), add your name <span class="req">*</span>
+      <input name="newName" id="newName" autocomplete="name" placeholder="First and last name">
+    </label>
+
     <label class="field">Email <span class="req">*</span>
       <input type="email" name="email" autocomplete="email" required>
     </label>
@@ -106,35 +112,55 @@
   <div id="done" class="done" hidden>
     <div class="check">✓</div>
     <h2>You're on the list!</h2>
-    <p>Thanks for volunteering. We'll email you with your shift details and next steps.<br><br>
+    <p>Thanks for volunteering. We'll email you your shift details and next steps.<br><br>
       Questions? <a href="mailto:anthony@subtlefoodie.com">anthony@subtlefoodie.com</a></p>
   </div>
 
   <p class="foot">Powered by <b>tasteoff</b> · © <span id="yr"></span> · questions: <a href="mailto:anthony@subtlefoodie.com">anthony@subtlefoodie.com</a></p>
 </main>
 
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-  import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBJnKTOwlb7d-OuM2orGZx2Je0X_scJRQw",
-    authDomain: "judging-app-dd929.firebaseapp.com",
-    projectId: "judging-app-dd929",
-    storageBucket: "judging-app-dd929.firebasestorage.app",
-    messagingSenderId: "681684096241",
-    appId: "1:681684096241:web:bf2d195ef62127ca320550",
-  };
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  const authReady = new Promise((resolve) => {
-    onAuthStateChanged(auth, (u) => { if (u) resolve(u); });
-    signInAnonymously(auth).catch((e) => console.error("sign-in failed", e));
-  });
+<script>
+  // ======================= CONFIG =======================
+  // Paste your deployed Google Apps Script Web App URL here (it ends in /exec).
+  // Until this is set, the form loads but can't submit.
+  const ENDPOINT = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+  // ======================================================
 
   document.getElementById("yr").textContent = new Date().getFullYear();
+
+  const nameSelect = document.getElementById("nameSelect");
+  const newOpt = nameSelect.querySelector('option[value="__new__"]');
+  const newNameWrap = document.getElementById("newNameWrap");
+  const newName = document.getElementById("newName");
+  nameSelect.addEventListener("change", () => {
+    const isNew = nameSelect.value === "__new__";
+    newNameWrap.hidden = !isNew;
+    if (isNew) newName.focus();
+  });
+
+  const isUnset = () => !ENDPOINT || ENDPOINT.indexOf("PASTE_") === 0;
+
+  // Load known volunteer names from the Google Sheet via the web app (JSONP avoids CORS).
+  function loadNames() {
+    return new Promise((resolve) => {
+      if (isUnset()) { resolve([]); return; }
+      const cb = "__vn" + Date.now();
+      const s = document.createElement("script");
+      const finish = (names) => { try { delete window[cb]; } catch (e) {} s.remove(); resolve(names || []); };
+      const t = setTimeout(() => finish([]), 7000);
+      window[cb] = (data) => { clearTimeout(t); finish((data && data.names) || []); };
+      s.onerror = () => { clearTimeout(t); finish([]); };
+      s.src = ENDPOINT + (ENDPOINT.indexOf("?") > -1 ? "&" : "?") + "callback=" + cb;
+      document.head.appendChild(s);
+    });
+  }
+  loadNames().then((names) => {
+    names.slice().sort((a, b) => String(a).localeCompare(String(b))).forEach((nm) => {
+      const o = document.createElement("option");
+      o.value = nm; o.textContent = nm;
+      nameSelect.insertBefore(o, newOpt);
+    });
+  });
 
   const form = document.getElementById("f");
   form.addEventListener("submit", async (e) => {
@@ -142,30 +168,38 @@
     const sub = document.getElementById("sub");
     const msg = document.getElementById("msg");
     const fd = new FormData(form);
-    const name = (fd.get("name") || "").trim();
+    const sel = fd.get("nameSelect") || "";
+    const name = (sel === "__new__" ? (fd.get("newName") || "") : sel).trim();
     const email = (fd.get("email") || "").trim();
     const phone = (fd.get("phone") || "").trim();
-    if (!name || !email || !phone) { msg.textContent = "Please add your name, email and phone."; return; }
+    if (!name) { msg.textContent = "Please select or add your name."; return; }
+    if (!email || !phone) { msg.textContent = "Please add your email and phone."; return; }
+    if (isUnset()) { msg.textContent = "Form isn't connected yet — please try again later."; return; }
 
     sub.disabled = true; sub.textContent = "Submitting…"; msg.textContent = "";
+    const payload = {
+      event: "houbbq-throwdown-2026",
+      name, email, phone,
+      addedNewName: sel === "__new__",
+      availability: fd.getAll("availability"),
+      roles: fd.getAll("roles"),
+      shirt: fd.get("shirt") || "",
+      notes: (fd.get("notes") || "").trim(),
+    };
     try {
-      await authReady;
-      await addDoc(collection(db, "volunteers"), {
-        event: "houbbq-throwdown-2026",
-        name, email, phone,
-        availability: fd.getAll("availability"),
-        roles: fd.getAll("roles"),
-        shirt: fd.get("shirt") || "",
-        notes: (fd.get("notes") || "").trim(),
-        createdAt: serverTimestamp(),
+      // no-cors: the request reaches Apps Script and appends the row; the response is opaque.
+      await fetch(ENDPOINT, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload),
       });
       form.hidden = true;
       document.getElementById("done").hidden = false;
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
-      console.error(err);
       sub.disabled = false; sub.textContent = "Sign me up →";
-      msg.textContent = "Sorry — couldn't submit (" + (err.code || err.message) + "). Please try again, or email anthony@subtlefoodie.com.";
+      msg.textContent = "Sorry — couldn't submit. Please try again, or email anthony@subtlefoodie.com.";
     }
   });
 </script>

@@ -25,15 +25,5 @@ service cloud.firestore {
     match /templates/{templateId} {
       allow read, write: if request.auth != null;
     }
-
-    // Volunteer sign-ups (public form). Write-only from the client: anyone
-    // signed in (anonymously) can SUBMIT a signup, but no one can read, list,
-    // edit or delete others' entries — so contact info can't be scraped from
-    // the browser. View submissions in the Firebase console (Firestore >
-    // volunteers) or export via an authenticated admin/CLI.
-    match /volunteers/{id} {
-      allow create: if request.auth != null;
-      allow read, update, delete: if false;
-    }
   }
 }
