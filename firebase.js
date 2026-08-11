@@ -209,6 +209,9 @@ export async function listEvents() {
       rows.push({
         id: d.id,
         name: x.name || d.id,
+        status: x.status || (x.historical ? "done" : "draft"),
+        eventDate: x.eventDate || "",
+        venue: x.venue || "",
         teamCount: (x.teams || []).length,
         judgeCount: (x.judges || []).length,
         updatedAt: x.updatedAt || null,

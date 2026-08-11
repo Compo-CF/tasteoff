@@ -178,6 +178,7 @@ async function render() {
   if (path === "/participants") return renderHistory("restaurants");
   if (path === "/runner") return renderRunner();
   if (path === "/checklist") return renderChecklist();
+  if (path === "/events") return renderEvents();
   if (path === "/menu") return renderHome();
   return renderLanding();
 }
@@ -242,6 +243,10 @@ function renderHome() {
           <div class="ci">⚙️</div><h3>Set up event</h3>
           <p>Criteria, judges, teams, codes.</p>
         </a>
+        <a class="card events" href="#/events">
+          <div class="ci">🗂️</div><h3>My events</h3>
+          <p>Drafts &amp; upcoming — pick one to work on.</p>
+        </a>
         <a class="card checklist" href="#/checklist">
           <div class="ci">✅</div><h3>Event checklist</h3>
           <p>Everything you need to run judging.</p>
@@ -305,6 +310,7 @@ function buildChecklistView(ev, eventId) {
   const tablesUsed = [...new Set(teams.map((t) => t.table || "A"))].sort();
   const jByTable = (t) => judges.filter((j) => (j.table || "A") === t).length;
   const thinTable = tablesUsed.filter((t) => jByTable(t) < 3);
+  const withEmail = teams.filter((t) => t.contactEmail && String(t.contactEmail).trim()).length;
   const pc = ev && ev.awards && ev.awards.peoples && ev.awards.peoples.enabled;
 
   // status: "ok" | "warn" | "todo"; `req` marks items that gate readiness.
@@ -352,6 +358,30 @@ function buildChecklistView(ev, eventId) {
         : `${judges.length} judge(s)` +
           (tablesUsed.length > 1 ? ` · ${tablesUsed.map((t) => `Table ${t}: ${jByTable(t)}`).join(" · ")}` : "") +
           (thinTable.length ? ` · 3+ per table recommended (Min-Max drops a high & low)` : ""),
+    },
+    {
+      req: false,
+      title: "Date & time",
+      status: ev && ev.eventDate ? "ok" : "todo",
+      detail:
+        ev && ev.eventDate
+          ? `${fmtDay(ev.eventDate)} · serving from ${(ev.schedule && ev.schedule.startTime) || "13:00"}`
+          : "Set the event date and serving start in Set up event.",
+    },
+    {
+      req: false,
+      title: "Venue",
+      status: ev && ev.venue ? "ok" : "todo",
+      detail: ev && ev.venue ? esc(ev.venue) : "Add where the event is held.",
+    },
+    {
+      req: false,
+      title: "Restaurant menu contacts",
+      status: !teams.length ? "todo" : withEmail === teams.length ? "ok" : withEmail ? "warn" : "todo",
+      detail: !teams.length
+        ? "Add restaurants first, then a contact email for each to request their menu items."
+        : `${withEmail}/${teams.length} restaurants have a contact email` +
+          (withEmail < teams.length ? " — add the rest to collect menus" : ""),
     },
     {
       req: false,
@@ -403,6 +433,94 @@ function buildChecklistView(ev, eventId) {
       <span class="ckedit">edit ›</span>
     </a>`);
     box.appendChild(row);
+  });
+  return c;
+}
+
+// ---------- MY EVENTS (drafts dashboard) ----------
+// Manage a whole series of events by lifecycle status. Pick one to make it the
+// active event, then work on it in Set up event / checklist.
+function renderEvents() {
+  const myToken = renderToken;
+  app().replaceChildren(
+    el(`<div class="wrap"><a class="back" href="#/menu">← home</a>
+      <h2>My events</h2><p class="sub">Loading your events…</p></div>`)
+  );
+  listEvents().then((list) => {
+    if (isStale(myToken)) return;
+    app().replaceChildren(buildEventsView(list));
+  });
+}
+
+function buildEventsView(list) {
+  const active = LS.activeEvent();
+  const c = el(`<div class="wrap events">
+    <a class="back" href="#/menu">← home</a>
+    <div class="evtophead">
+      <h2>My events</h2>
+      <button class="primary" id="evNew">+ New event</button>
+    </div>
+    <p class="sub">Keep a series of events in draft, then bring one live. Pick one to make it active.</p>
+    <div class="evgroups"></div>
+  </div>`);
+
+  $("#evNew", c).onclick = () => {
+    const id = "event-" + uid().slice(0, 5);
+    LS.setActiveEvent(id);
+    location.hash = "#/admin";
+  };
+
+  const groups = $(".evgroups", c);
+  const order = [
+    ["draft", "Drafts", "In planning — not ready to score yet."],
+    ["live", "Live", "Happening now or ready to go."],
+    ["done", "Completed", "Finished events and their results."],
+  ];
+  const byStatus = { draft: [], live: [], done: [] };
+  list.forEach((r) => (byStatus[STATUS_META[r.status] ? r.status : "draft"].push(r)));
+
+  if (!list.length) {
+    groups.appendChild(el(`<p class="hint">No events yet. Hit “+ New event” to start your first one.</p>`));
+    return c;
+  }
+
+  order.forEach(([key, label, blurb]) => {
+    const rows = byStatus[key];
+    if (!rows.length) return;
+    const sec = el(`<section class="evgroup">
+      <div class="evgrouphead"><span class="stbadge ${key}">${STATUS_META[key].label}</span>
+        <h3>${label}</h3><span class="evcount">${rows.length}</span></div>
+      <p class="evblurb">${blurb}</p>
+      <div class="evrows"></div>
+    </section>`);
+    const box = $(".evrows", sec);
+    rows.forEach((r) => {
+      const isCur = r.id === active;
+      const bits = [
+        r.eventDate ? fmtDay(r.eventDate) : null,
+        r.venue || null,
+        `${r.teamCount} teams · ${r.judgeCount} judges`,
+      ].filter(Boolean);
+      const row = el(`<div class="evcard${isCur ? " cur" : ""}">
+        <div class="evcardmain">
+          <div class="evcardtop"><span class="evtitle">${esc(r.name)}</span>${
+        isCur ? `<span class="curtag">active</span>` : ""
+      }</div>
+          <div class="evcardmeta">${bits.map((b) => esc(b)).join("  ·  ")}</div>
+        </div>
+        <div class="evcardacts">
+          <a class="mini" href="#/checklist">Checklist</a>
+          <button class="mini go">Open →</button>
+        </div>
+      </div>`);
+      row.querySelector(".go").onclick = () => {
+        LS.setActiveEvent(r.id);
+        location.hash = "#/admin";
+      };
+      row.querySelector('a[href="#/checklist"]').onclick = () => LS.setActiveEvent(r.id);
+      box.appendChild(row);
+    });
+    groups.appendChild(sec);
   });
   return c;
 }
@@ -460,11 +578,14 @@ async function renderAdmin(preloaded) {
     }
     list.forEach((r) => {
       const isCur = r.id === ev.id;
+      const sk = STATUS_META[r.status] ? r.status : "draft";
       const row = el(`
         <div class="evrow${isCur ? " cur" : ""}">
           <button class="evopen">
-            <span class="evname">${esc(r.name)}${isCur ? " ·  current" : ""}</span>
-            <span class="evmeta">${r.teamCount} teams · ${r.judgeCount} judges${
+            <span class="evname"><span class="stbadge sm ${sk}">${STATUS_META[sk].label}</span> ${esc(r.name)}${
+        isCur ? " ·  current" : ""
+      }</span>
+            <span class="evmeta">${r.eventDate ? fmtDay(r.eventDate) + " · " : ""}${r.teamCount} teams · ${r.judgeCount} judges${
         r.updatedAt ? " · " + fmtDate(r.updatedAt) : ""
       }</span>
           </button>
@@ -548,10 +669,22 @@ async function renderAdmin(preloaded) {
   };
 
   // --- identity + schedule ---
+  const est = eventStatus(ev);
   const meta = el(`
     <section class="panel">
       <label>Event ID (URL slug) <input id="a_id" value="${esc(ev.id)}"></label>
       <label>Event name <input id="a_name" value="${esc(ev.name)}"></label>
+      <div class="row">
+        <label>Status
+          <select id="a_status">
+            <option value="draft"${est === "draft" ? " selected" : ""}>Draft — planning</option>
+            <option value="live"${est === "live" ? " selected" : ""}>Live — happening</option>
+            <option value="done"${est === "done" ? " selected" : ""}>Done — completed</option>
+          </select>
+        </label>
+        <label>Event date <input id="a_date" type="date" value="${esc(ev.eventDate || "")}"></label>
+      </div>
+      <label>Venue <input id="a_venue" placeholder="Venue / location" value="${esc(ev.venue || "")}"></label>
       <div class="row">
         <label>Serving start <input id="a_start" type="time" value="${esc(
           ev.schedule?.startTime || "13:00"
@@ -815,6 +948,8 @@ async function renderAdmin(preloaded) {
           <input class="ts" type="time" value="${esc(t.serveTime || "")}" title="serve time">
           <button class="del">✕</button>
           <input class="tdd" placeholder="Dish description (shown on ballot)" value="${esc(t.dishDescription || "")}">
+          <input class="tcn" placeholder="Contact name" value="${esc(t.contactName || "")}">
+          <input class="tce" type="email" placeholder="Contact email (for menu)" value="${esc(t.contactEmail || "")}">
         </div>`);
       row.querySelector(".del").onclick = () => {
         ev.teams.splice(i, 1);
@@ -831,11 +966,13 @@ async function renderAdmin(preloaded) {
       dishNumber: parseInt(r.querySelector(".td").value) || null,
       serveTime: r.querySelector(".ts").value,
       dishDescription: r.querySelector(".tdd").value.trim(),
+      contactName: r.querySelector(".tcn").value.trim(),
+      contactEmail: r.querySelector(".tce").value.trim(),
     }));
   }
   $("#addT", tSec).onclick = () => {
     readTeams();
-    ev.teams.push({ code: "", name: "", table: "A", dishNumber: null, serveTime: "", dishDescription: "" });
+    ev.teams.push({ code: "", name: "", table: "A", dishNumber: null, serveTime: "", dishDescription: "", contactName: "", contactEmail: "" });
     drawTeams();
   };
   $("#autoCode", tSec).onclick = () => {
@@ -859,6 +996,9 @@ async function renderAdmin(preloaded) {
   function readMeta() {
     ev.id = $("#a_id").value.trim() || DEFAULT_EVENT_ID;
     ev.name = $("#a_name").value.trim();
+    ev.status = $("#a_status").value || "draft";
+    ev.eventDate = $("#a_date").value || "";
+    ev.venue = $("#a_venue").value.trim();
     ev.schedule = {
       startTime: $("#a_start").value || "13:00",
       intervalMin: parseInt($("#a_int").value) || 5,
@@ -1994,6 +2134,9 @@ function blankEvent(id) {
   return {
     id,
     name: "",
+    status: "draft", // draft | live | done — planning lifecycle
+    eventDate: "",
+    venue: "",
     criteria: [],
     judges: [],
     teams: [],
@@ -2003,6 +2146,13 @@ function blankEvent(id) {
     awards: { judgesTopN: 3, peoples: { enabled: false, unit: "Coins", topN: 3 } },
   };
 }
+
+const STATUS_META = {
+  draft: { label: "Draft", cls: "draft" },
+  live: { label: "Live", cls: "live" },
+  done: { label: "Done", cls: "done" },
+};
+const eventStatus = (ev) => (ev && STATUS_META[ev.status] ? ev.status : "draft");
 
 function eventAwards(ev) {
   const a = ev.awards || {};
@@ -2021,6 +2171,14 @@ function fmtDate(ts) {
   if (!ms) return "";
   const d = new Date(ms);
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+// Format an ISO date string (yyyy-mm-dd) as e.g. "Sep 15, 2026" without TZ drift.
+function fmtDay(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+  if (!m) return iso || "";
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function addMinutes(hhmm, mins) {

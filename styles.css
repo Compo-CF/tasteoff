@@ -109,6 +109,41 @@ button { font: inherit; cursor: pointer; }
 .ckgo p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.4; }
 .ckgo .switchlink { margin-left: auto; flex: none; }
 .ckgo.live { border-style: solid; border-color: #2e7d47; }
+
+/* ---------- STATUS BADGES ---------- */
+.stbadge { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; padding: 3px 9px; border-radius: 20px; color: #fff; vertical-align: middle; }
+.stbadge.sm { font-size: 10px; padding: 2px 7px; }
+.stbadge.draft { background: var(--muted); }
+.stbadge.live { background: #2e7d47; }
+.stbadge.done { background: #3b6ea5; }
+
+/* ---------- MY EVENTS (drafts dashboard) ---------- */
+.card.events { border-left: 5px solid #17817e; }
+.evtophead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.evtophead h2 { margin: 0; }
+.events .primary { padding: 10px 16px; border-radius: 12px; font-size: 14px; }
+.evgroups { display: flex; flex-direction: column; gap: 22px; margin-top: 18px; }
+.evgrouphead { display: flex; align-items: center; gap: 10px; }
+.evgrouphead h3 { margin: 0; font-size: 16px; }
+.evcount { margin-left: auto; color: var(--muted); font-weight: 700; font-size: 13px; }
+.evblurb { margin: 3px 0 11px; color: var(--muted); font-size: 13px; }
+.evrows { display: grid; gap: 10px; }
+.evcard { display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+.evcard.cur { border-color: var(--brand); box-shadow: 0 0 0 2px rgba(181,54,31,.12); }
+.evcardmain { flex: 1 1 auto; min-width: 0; }
+.evcardtop { display: flex; align-items: center; gap: 8px; }
+.evtitle { font-weight: 700; font-size: 15px; }
+.curtag { font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--brand); border: 1px solid var(--brand); border-radius: 20px; padding: 1px 7px; }
+.evcardmeta { color: var(--muted); font-size: 13px; margin-top: 3px; }
+.evcardacts { flex: none; display: flex; gap: 8px; align-items: center; }
+.evcardacts .mini { text-decoration: none; display: inline-flex; align-items: center; }
+
+/* team-row contact inputs (menu collection) */
+.trow .tcn { grid-column: 1 / 4; }
+.trow .tce { grid-column: 4 / -1; }
+@media (max-width: 560px) {
+  .trow .tcn, .trow .tce { grid-column: 1 / -1; }
+}
 #judgetoggle.live { background: var(--ok); color: #fff; border-color: var(--ok); }
 
 /* ---- panels / admin ---- */
