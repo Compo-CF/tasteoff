@@ -1759,7 +1759,7 @@ async function renderHistory(mode) {
       )
       .join("");
     const pub = ev.publishedWinner && ev.publishedWinner !== w.winner
-      ? `<p class="pubnote">🏅 Published/announced winner: <b>${esc(ev.publishedWinner)}</b> — the officially awarded champion. It differs from the score-computed leader below (a hand-decided result on a near-tie); the scoring here is shown as computed.</p>`
+      ? `<p class="pubnote">🏅 Published/announced winner: <b>${esc(ev.publishedWinner)}</b> — the trophy actually awarded that night. It differs from the score-computed leader shown here; this app ranks strictly from the judging spreadsheet, so the computed champion stays authoritative.</p>`
       : "";
     const ov = el(`<div class="modal-ov"><div class="modal wide">
       <div class="dd-head"><h3>🏆 ${esc(w.winner)}</h3><button class="mini" id="wClose">close</button></div>
