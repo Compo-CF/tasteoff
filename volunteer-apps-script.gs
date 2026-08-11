@@ -23,8 +23,8 @@
 // ===================== CONFIG =====================
 var SIGNUP_TAB = "Volunteer Signups";   // tab the form writes to (created if missing)
 var CANDIDATE_TAB_INDEX = 0;            // which existing tab holds your candidate list (0 = first tab)
-var NAME_HEADER = "Name";               // header of the column holding candidate names
-                                        // (falls back to column A if that header isn't found)
+// Candidate names come from the candidate tab: column A = Last name, column B = First name.
+// The dropdown shows them as "First Last".
 // =================================================
 
 function doPost(e) {
@@ -68,19 +68,25 @@ function doGet(e) {
 
 function getCandidateNames() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheets = ss.getSheets();
-  var sh = sheets[CANDIDATE_TAB_INDEX];
+  var sh = ss.getSheets()[CANDIDATE_TAB_INDEX];
   if (!sh) return [];
   var values = sh.getDataRange().getValues();
-  if (values.length < 2) return [];
-  var header = values[0].map(function (h) { return String(h).trim().toLowerCase(); });
-  var col = header.indexOf(NAME_HEADER.toLowerCase());
-  if (col < 0) col = 0; // fall back to column A
+  if (!values.length) return [];
+  // Column A = Last name, Column B = First name. Show as "First Last".
+  // Skip row 1 only if it looks like a header row.
+  var a0 = String(values[0][0] || "").toLowerCase();
+  var b0 = String(values[0][1] || "").toLowerCase();
+  var start = (/name|last|first/.test(a0) || /name|first|last/.test(b0)) ? 1 : 0;
   var seen = {}, out = [];
-  for (var i = 1; i < values.length; i++) {
-    var v = String(values[i][col] || "").trim();
-    if (v && !seen[v]) { seen[v] = true; out.push(v); }
+  for (var i = start; i < values.length; i++) {
+    var last = String(values[i][0] || "").trim();
+    var first = String(values[i][1] || "").trim();
+    var full = (first + " " + last).replace(/\s+/g, " ").trim();
+    if (!full) continue;
+    var key = full.toLowerCase();
+    if (!seen[key]) { seen[key] = true; out.push(full); }
   }
+  out.sort(function (a, b) { return a.localeCompare(b); });
   return out;
 }
 
