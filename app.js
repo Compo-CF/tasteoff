@@ -220,8 +220,8 @@ function renderLanding() {
       </div>
       <div class="lservice">
         <div class="lservicetxt">
-          <h3>Want us to run the judging for you?</h3>
-          <p>A done-for-you service — blind panels, dream-team advice, live results. Contact for details &amp; pricing.</p>
+          <h3>Have an event? Let us coordinate the judging.</h3>
+          <p>Blind panels, dream-team advice, live results — coordinated for you. Contact for details &amp; pricing.</p>
         </div>
         <a class="primary" href="mailto:anthony@subtlefoodie.com?subject=Food%20competition%20judging%20inquiry">Contact us →</a>
       </div>
