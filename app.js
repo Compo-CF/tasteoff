@@ -177,15 +177,12 @@ async function render() {
   if (path === "/history") return renderHistory("events");
   if (path === "/participants") return renderHistory("restaurants");
   if (path === "/runner") return renderRunner();
-  return renderHome();
+  if (path === "/menu") return renderHome();
+  return renderLanding();
 }
 
-// ---------- HOME ----------
-function renderHome() {
-  app().replaceChildren(
-    el(`
-    <div class="wrap home">
-      <svg class="brandsvg" viewBox="0 0 350 128" role="img" aria-label="tasteoff — digital scorecards for food competitions">
+// Shared brand wordmark (clipboard scorecard + "tasteoff").
+const BRAND_SVG = `<svg class="brandsvg" viewBox="0 0 350 128" role="img" aria-label="tasteoff — digital scorecards for food competitions">
         <rect x="8" y="20" width="76" height="92" rx="14" fill="var(--card)" stroke="var(--line)" stroke-width="2"/>
         <rect x="33" y="13" width="26" height="15" rx="7" fill="var(--brand)"/>
         <rect x="42" y="16" width="8" height="4" rx="2" fill="var(--card)" opacity="0.7"/>
@@ -196,7 +193,40 @@ function renderHome() {
         <path d="M18 84 l5 5 l10 -12" fill="none" stroke="var(--muted)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
         <rect x="44" y="80" width="14" height="6" rx="3" fill="var(--muted)" opacity="0.55"/>
         <text x="100" y="86" font-family="inherit" font-weight="800" font-size="56" letter-spacing="-2.5"><tspan fill="var(--ink)">taste</tspan><tspan fill="var(--brand)">off</tspan></text>
-      </svg>
+      </svg>`;
+
+// ---------- LANDING (intro shown before the menu) ----------
+function renderLanding() {
+  app().replaceChildren(
+    el(`
+    <div class="wrap landing">
+      ${BRAND_SVG}
+      <p class="tag">Digital scorecards for food competitions — score live, from any device.</p>
+      <h1 class="lhero">Run a competition people<br><span>actually trust.</span></h1>
+      <p class="llead">tasteoff turns messy paper ballots into blind, weighted, tie-free scoring — with a live leaderboard and post-event analytics. Built for cook-offs, bake-offs, BBQ throwdowns and chef battles.</p>
+      <div class="lcta">
+        <a class="primary big" href="#/menu">Enter tasteoff →</a>
+        <a class="demo-link" href="#/judge?event=demo&table=A">or try the demo (no setup) →</a>
+      </div>
+      <div class="lsteps">
+        <div class="lstep"><div class="ln">1</div><h3>Set up your event</h3><p>Criteria &amp; weights, judges, teams and blind codes — or import a spreadsheet.</p></div>
+        <div class="lstep"><div class="ln">2</div><h3>Judges score blind</h3><p>A code on their phone, 1–5 on each criterion. No names, no bias, works offline.</p></div>
+        <div class="lstep"><div class="ln">3</div><h3>Crown a champion</h3><p>Instant, tie-free results plus People's Choice and judge/dish analytics.</p></div>
+      </div>
+      <div class="lfeat">
+        <span>🔒 Blind coding</span><span>⚖️ Weighted 1–5</span><span>🥇 No ties, ever</span><span>📊 Analytics</span>
+      </div>
+      <p class="foot">Add to Home Screen to use it like an app.</p>
+    </div>`)
+  );
+}
+
+// ---------- HOME (menu hub) ----------
+function renderHome() {
+  app().replaceChildren(
+    el(`
+    <div class="wrap home">
+      <a href="#/" class="brandlink" aria-label="tasteoff intro">${BRAND_SVG}</a>
       <p class="tag">Digital scorecards for food competitions — score live, from any device.</p>
       <div class="cards">
         <a class="card judge disabled" id="judgeCard" aria-disabled="true">
@@ -267,7 +297,7 @@ async function renderAdmin(preloaded) {
   }
 
   const c = el(`<div class="wrap admin"></div>`);
-  c.appendChild(el(`<a class="back" href="#/">← home</a>`));
+  c.appendChild(el(`<a class="back" href="#/menu">← home</a>`));
   c.appendChild(el(`<h2>Event setup</h2>`));
 
   // Load the master roster so imported/typed judges link to existing judges.
@@ -834,14 +864,14 @@ async function renderJudge(params) {
   if (isStale(myToken)) return;
   if (!ev) {
     app().replaceChildren(
-      el(`<div class="wrap"><a class="back" href="#/">← home</a><p class="empty">No event found. Ask the organizer for the link.</p></div>`)
+      el(`<div class="wrap"><a class="back" href="#/menu">← home</a><p class="empty">No event found. Ask the organizer for the link.</p></div>`)
     );
     return;
   }
   // Judging must be explicitly opened by the organizer before judges can score.
   if (eventId !== "demo" && ev.judgingOpen !== true) {
     app().replaceChildren(
-      el(`<div class="wrap"><a class="back" href="#/">← home</a>
+      el(`<div class="wrap"><a class="back" href="#/menu">← home</a>
         <h2>${esc(ev.name || "Judging")}</h2>
         <p class="empty">⏳ Judging hasn't opened yet.<br>The organizer will start it when the event begins.</p></div>`)
     );
@@ -868,7 +898,7 @@ async function renderJudge(params) {
 
   const c = el(`<div class="wrap judge"></div>`);
   c.appendChild(
-    el(`<div class="jbar"><a class="back" href="#/">←</a>
+    el(`<div class="jbar"><a class="back" href="#/menu">←</a>
       <div class="who"><div class="evname">${esc(ev.name || "")}</div><div class="whoj">${esc(
       judge.name
     )} · Table ${judge.table}</div></div>
@@ -1018,7 +1048,7 @@ async function renderJudge(params) {
 
 function pickJudge(ev, tableHint) {
   const judges = tableHint ? ev.judges.filter((j) => j.table === tableHint) : ev.judges;
-  const c = el(`<div class="wrap"><a class="back" href="#/">← home</a>
+  const c = el(`<div class="wrap"><a class="back" href="#/menu">← home</a>
     <h2>${esc(ev.name || "Judging")}</h2>
     <p class="sub">Tap your name to start${tableHint ? ` (Table ${tableHint})` : ""}.</p>
     <div class="picklist"></div></div>`);
@@ -1056,7 +1086,7 @@ async function renderResults() {
   if (isStale(myToken)) return;
   if (!ev) {
     app().replaceChildren(
-      el(`<div class="wrap"><a class="back" href="#/">← home</a><p class="empty">No event found.</p></div>`)
+      el(`<div class="wrap"><a class="back" href="#/menu">← home</a><p class="empty">No event found.</p></div>`)
     );
     return;
   }
@@ -1070,7 +1100,7 @@ async function renderResults() {
   }
 
   const c = el(`<div class="wrap results"></div>`);
-  c.appendChild(el(`<div class="jbar"><a class="back" href="#/">←</a><div class="who">${esc(
+  c.appendChild(el(`<div class="jbar"><a class="back" href="#/menu">←</a><div class="who">${esc(
     ev.name || "Results"
   )}</div><a class="mini" href="#/runner?event=${encodeURIComponent(ev.id)}">Runner sheet</a><button class="mini" id="csv">export CSV</button></div>`));
   const aw = eventAwards(ev);
@@ -1422,7 +1452,7 @@ function exportCSV(ev, scores, peoples, aw) {
 async function renderJudgesDB() {
   const myToken = renderToken;
   app().replaceChildren(
-    el(`<div class="wrap"><a class="back" href="#/">← home</a><h2>Judge database</h2><p class="sub">Loading judges across all events…</p></div>`)
+    el(`<div class="wrap"><a class="back" href="#/menu">← home</a><h2>Judge database</h2><p class="sub">Loading judges across all events…</p></div>`)
   );
   let [{ events, scoresByEvent }, roster] = await Promise.all([
     loadAllEventsWithScores(),
@@ -1437,7 +1467,7 @@ async function renderJudgesDB() {
   const rosterMap = Object.fromEntries(roster.map((r) => [r.id, r]));
   const allProfiles = judgeProfiles(rosterMap, events, scoresByEvent);
 
-  const c = el(`<div class="wrap judgesdb"><a class="back" href="#/">← home</a>
+  const c = el(`<div class="wrap judgesdb"><a class="back" href="#/menu">← home</a>
     <h2>Judge database</h2>
     <p class="sub" id="jsub"></p></div>`);
 
@@ -1583,7 +1613,7 @@ async function renderRunner() {
   const ev = await loadEvent(eventId);
   if (isStale(myToken)) return;
   if (!ev) {
-    app().replaceChildren(el(`<div class="wrap"><a class="back" href="#/">← home</a><p class="empty">No event found.</p></div>`));
+    app().replaceChildren(el(`<div class="wrap"><a class="back" href="#/menu">← home</a><p class="empty">No event found.</p></div>`));
     return;
   }
   if (ev.resultsPasscode && !resultsUnlocked) {
@@ -1606,7 +1636,7 @@ async function renderRunner() {
     )
     .join("");
   const c = el(`<div class="wrap runner">
-    <div class="jbar noprint"><a class="back" href="#/">←</a><div class="who">${esc(ev.name || "Runner sheet")}</div>
+    <div class="jbar noprint"><a class="back" href="#/menu">←</a><div class="who">${esc(ev.name || "Runner sheet")}</div>
       <button class="mini" id="print">Print</button></div>
     <h2 class="runner-h">Runner sheet — pickup schedule</h2>
     <p class="sub confidential noprint">🔒 Confidential — reveals the blind code → joint key. Do not show judges.</p>
@@ -1622,7 +1652,7 @@ async function renderHistory(mode) {
   const myToken = renderToken;
   const title = mode === "restaurants" ? "Participant history" : "Event history";
   app().replaceChildren(
-    el(`<div class="wrap"><a class="back" href="#/">← home</a><h2>${title}</h2><p class="sub">Loading past events…</p></div>`)
+    el(`<div class="wrap"><a class="back" href="#/menu">← home</a><h2>${title}</h2><p class="sub">Loading past events…</p></div>`)
   );
   const { events, scoresByEvent } = await loadAllEventsWithScores();
   if (isStale(myToken)) return;
@@ -1642,7 +1672,7 @@ async function renderHistory(mode) {
 
   const isParts = tab === "restaurants";
   const c = el(`<div class="wrap history">
-    <a class="back" href="#/">← home</a>
+    <a class="back" href="#/menu">← home</a>
     <h2>${isParts ? "Participant history" : "Event history"}</h2>
     <p class="sub" id="hsub"></p>
     <div class="rcontrols">
@@ -1804,7 +1834,7 @@ async function renderHistory(mode) {
 
 // ---------- shared UI ----------
 function gate(label, onSubmit) {
-  const c = el(`<div class="wrap gate"><a class="back" href="#/">← home</a>
+  const c = el(`<div class="wrap gate"><a class="back" href="#/menu">← home</a>
     <h2>🔒 ${esc(label)}</h2>
     <input type="password" id="pc" inputmode="numeric" placeholder="passcode">
     <button class="primary" id="go">Enter</button></div>`);

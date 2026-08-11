@@ -60,6 +60,28 @@ button { font: inherit; cursor: pointer; }
 .foot { margin-top: 28px; color: var(--muted); font-size: 13px; }
 .demo-link { display: inline-block; margin-top: 6px; font-size: 13px; font-weight: 600; }
 .card.disabled { opacity: 0.6; pointer-events: none; cursor: default; filter: grayscale(45%); border-left-color: var(--muted); }
+
+/* ---------- LANDING (intro before the menu) ---------- */
+.landing { text-align: center; padding-top: 34px; }
+.brandlink { display: block; text-decoration: none; }
+.lhero { font-size: clamp(30px, 7vw, 46px); line-height: 1.05; font-weight: 800; letter-spacing: -1px; margin: 14px 0 0; color: var(--ink); }
+.lhero span { color: var(--brand); }
+.llead { max-width: 560px; margin: 16px auto 0; color: var(--muted); font-size: 16px; line-height: 1.55; }
+.lcta { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 26px 0 8px; }
+.primary.big { display: inline-block; text-decoration: none; font-size: 18px; padding: 15px 34px; border-radius: 14px; box-shadow: var(--shadow); }
+.primary.big:active { transform: scale(0.98); }
+.lsteps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 34px 0 4px; text-align: left; }
+.lstep { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
+.lstep .ln { width: 34px; height: 34px; border-radius: 50%; background: var(--brand); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
+.lstep:nth-child(2) .ln { background: var(--brand-2); }
+.lstep:nth-child(3) .ln { background: #2e7d47; }
+.lstep h3 { margin: 0 0 4px; font-size: 16px; }
+.lstep p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.4; }
+.lfeat { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 22px 0 0; }
+.lfeat span { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 7px 14px; font-size: 13px; font-weight: 600; color: var(--ink); }
+@media (max-width: 560px) {
+  .lsteps { grid-template-columns: 1fr; }
+}
 #judgetoggle.live { background: var(--ok); color: #fff; border-color: var(--ok); }
 
 /* ---- panels / admin ---- */
