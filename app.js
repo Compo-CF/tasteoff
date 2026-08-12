@@ -179,6 +179,7 @@ async function render() {
   if (path === "/runner") return renderRunner();
   if (path === "/checklist") return renderChecklist();
   if (path === "/events") return renderEvents();
+  if (path === "/sample") return renderSample();
   if (path === "/menu") return renderHome();
   return renderLanding();
 }
@@ -220,6 +221,7 @@ function renderLanding() {
           <img src="samples/results.png" alt="Sample results leaderboard" loading="lazy">
           <img src="samples/analytics.png" alt="Sample judge & dish analytics" loading="lazy">
         </div>
+        <a class="samplelink" href="#/sample">▶ Try the interactive sample ballot →</a>
       </div>
       <div class="lservice">
         <div class="lservicetxt">
@@ -295,7 +297,7 @@ function renderHome() {
         </a>
       </div>
       <p class="foot">Add to Home Screen to use it like an app.</p>
-      <a class="demo-link" href="#/judge?event=demo&table=A">Try the demo (no setup) →</a>
+      <a class="demo-link" href="#/sample">See a sample ballot →</a>
     </div>`)
   );
   // The Judge card stays locked until the organizer opens judging on the active event.
@@ -553,6 +555,48 @@ function buildEventsView(list) {
     groups.appendChild(sec);
   });
   return c;
+}
+
+// ---------- SAMPLE BALLOT (inert demo — nothing saves or navigates) ----------
+function renderSample() {
+  const crits = [
+    { name: "Flavor", low: "Bland", high: "Rich & varied" },
+    { name: "Texture", low: "Tough", high: "Tender" },
+    { name: "Appearance", low: "Messy", high: "Stunning" },
+    { name: "Creativity", low: "Generic", high: "One of a kind" },
+  ];
+  const node = el(`<div class="wrap sample">
+    <a class="back" href="#/menu">← home</a>
+    <div class="samp-badge">SAMPLE · nothing is saved</div>
+    <h2>Try a sample ballot</h2>
+    <p class="sub">This is what a judge sees — tap 1–5 on each criterion. It's just a preview: scoring is visual only, and Submit doesn't save or send anything.</p>
+    <div class="samp-card">
+      <div class="samp-headrow"><span class="samp-dish">Dish A03</span><span class="samp-code">blind code · sample</span></div>
+      <div class="samp-crits"></div>
+      <button class="primary samp-submit" id="sampSubmit">Submit score</button>
+      <p class="samp-note" id="sampNote"></p>
+    </div>
+  </div>`);
+  const list = node.querySelector(".samp-crits");
+  crits.forEach((c) => {
+    const row = el(`<div class="samp-row">
+      <div class="samp-cn"><b>${esc(c.name)}</b><span class="samp-scale">${esc(c.low)} → ${esc(c.high)}</span></div>
+      <div class="samp-pills">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="samp-pill" data-n="${n}">${n}</button>`).join("")}</div>
+    </div>`);
+    row.querySelector(".samp-pills").addEventListener("click", (e) => {
+      const b = e.target.closest(".samp-pill");
+      if (!b) return;
+      row.querySelectorAll(".samp-pill").forEach((p) => p.classList.remove("on"));
+      b.classList.add("on");
+    });
+    list.appendChild(row);
+  });
+  node.querySelector("#sampSubmit").addEventListener("click", () => {
+    const note = node.querySelector("#sampNote");
+    note.textContent = "✓ That's the whole flow — quick, blind, tap-to-score. (Sample only; nothing was saved.)";
+    note.classList.add("show");
+  });
+  app().replaceChildren(node);
 }
 
 // ---------- ADMIN ----------

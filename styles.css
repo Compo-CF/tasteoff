@@ -96,6 +96,25 @@ button { font: inherit; cursor: pointer; }
   .lsamplegrid { grid-template-columns: 1fr; max-width: 380px; margin: 0 auto; }
 }
 .lcopy { margin: 34px 0 0; color: var(--muted); font-size: 12.5px; }
+.samplelink { display: inline-block; margin-top: 14px; font-size: 14px; font-weight: 700; text-decoration: none; color: var(--brand); }
+
+/* ---------- SAMPLE BALLOT (inert demo) ---------- */
+.sample { max-width: 560px; }
+.samp-badge { display: inline-block; margin: 6px 0 10px; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--brand-2); background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 5px 12px; }
+.samp-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; box-shadow: var(--shadow); margin-top: 8px; }
+.samp-headrow { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 6px; }
+.samp-dish { font-size: 24px; font-weight: 800; }
+.samp-code { font-size: 12.5px; color: var(--muted); }
+.samp-row { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.samp-cn { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.samp-cn b { font-size: 15px; }
+.samp-scale { font-size: 12px; color: var(--muted); }
+.samp-pills { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.samp-pill { padding: 12px 0; font-size: 16px; font-weight: 700; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--muted); cursor: pointer; }
+.samp-pill.on { background: var(--brand); color: #fff; border-color: var(--brand); }
+.samp-submit { width: 100%; margin-top: 18px; }
+.samp-note { margin: 12px 0 0; font-size: 14px; font-weight: 600; color: #2e7d47; opacity: 0; transition: opacity .2s; }
+.samp-note.show { opacity: 1; }
 
 /* image lightbox */
 .lightbox { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.85); display: flex; align-items: center; justify-content: center; padding: 20px; cursor: zoom-out; }
