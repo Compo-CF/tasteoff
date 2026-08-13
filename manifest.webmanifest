@@ -2,7 +2,7 @@
   "name": "tasteoff — food judging",
   "short_name": "tasteoff",
   "description": "Score food competitions on your phone; live collated results.",
-  "start_url": "./",
+  "start_url": "./#/menu",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
