@@ -103,6 +103,33 @@ function rdate(iso) {
   const MON = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   return `${MON[+m[2] - 1]} ${+m[3]}, ${m[1]}`;
 }
+function ordinal(n) { if (!n) return "unranked"; const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+// Mirrors app.js peoplesRanking: rank teams by crowd count, unplaced when 0.
+function peoplesRanking(teams, counts) {
+  const rows = (teams || []).map((t) => ({ code: t.code, name: t.name, table: t.table, count: Number((counts || {})[t.code]) || 0 }));
+  rows.sort((a, b) => b.count - a.count || String(a.code).localeCompare(String(b.code)));
+  rows.forEach((r, i) => { r.place = r.count > 0 ? i + 1 : null; });
+  return rows;
+}
+// Horizontal People's Choice bar chart (crowd counts).
+function chPeoples(items, unit) {
+  const wpx = 720, top = 44, rowH = 32, bottom = 12, left = 176, right = 66;
+  const hpx = top + bottom + items.length * rowH;
+  return chartPNG(wpx, hpx, (ctx) => {
+    const maxV = Math.max(...items.map((r) => r.count)) || 1, barMax = wpx - left - right;
+    ctx.fillStyle = RPT.brick; ctx.font = "bold 17px Helvetica,Arial"; ctx.textAlign = "left";
+    ctx.fillText(`People's Choice — ${unit} counted`, 8, 26);
+    items.forEach((r, i) => {
+      const y = top + i * rowH, col = i === 0 ? RPT.gold : (i < 3 ? RPT.ember : RPT.brick);
+      const bw = Math.max(3, (r.count / maxV) * barMax);
+      ctx.fillStyle = RPT.ink; ctx.font = "13px Helvetica,Arial"; ctx.textAlign = "right";
+      ctx.fillText(rclip(r.name || "#" + r.code, 24), left - 10, y + rowH / 2 + 4);
+      ctx.fillStyle = col; rRound(ctx, left, y + 6, bw, rowH - 14, 4); ctx.fill();
+      ctx.fillStyle = RPT.ink; ctx.font = "bold 12px Helvetica,Arial"; ctx.textAlign = "left";
+      ctx.fillText(String(r.count), left + bw + 6, y + rowH / 2 + 4);
+    });
+  });
+}
 export async function exportReportPDF(ev, scores, peoples, aw) {
   const doc = await buildReportDoc(ev, scores, peoples, aw);
   if (doc) doc.save(`${ev.id || "event"}-results-report.pdf`);
@@ -125,13 +152,35 @@ export async function buildReportDoc(ev, scores, peoples, aw) {
   const wpct = (c) => Math.round((+c.weight || 0) / wtot * 100);
   const equalW = new Set(criteria.map((c) => Math.round((+c.weight || 0) * 1e4))).size === 1;
   const win = rows[0], runner = rows[1];
-  const wd = dishAnalytics(criteria, teams, scores, win.code);
-  const wById = Object.fromEntries((wd.perCriterion || []).map((p) => [p.id, p.avg]));
+  // per-dish facet averages + judge spread, computed once and reused
+  const dishStats = teams.map((t) => {
+    const d = dishAnalytics(criteria, teams, scores, t.code);
+    return { code: t.code, name: t.name, spread: d.judgeSpread, verdict: d.verdict, by: Object.fromEntries((d.perCriterion || []).map((p) => [p.id, p.avg])) };
+  });
+  const dsByCode = Object.fromEntries(dishStats.map((d) => [d.code, d]));
   const fById = Object.fromEntries((ea.perCriterion || []).map((p) => [p.id, p.avg]));
-  const winVals = criteria.map((c) => wById[c.id] || 0);
+  const winVals = criteria.map((c) => (dsByCode[win.code] || { by: {} }).by[c.id] || 0);
   const fieldVals = criteria.map((c) => fById[c.id] || 0);
   const wStrongIdx = winVals.indexOf(Math.max(...winVals));
   const margin = runner ? Math.round((win[primary] - runner[primary]) * 100) / 100 : 0;
+  // notable dishes by judge agreement
+  const spreads = dishStats.filter((d) => typeof d.spread === "number");
+  const divisive = spreads.length ? spreads.reduce((a, b) => (b.spread > a.spread ? b : a)) : null;
+  const tightest = spreads.length ? spreads.reduce((a, b) => (b.spread < a.spread ? b : a)) : null;
+  // which dish topped each criterion
+  const critChamp = criteria.map((c) => {
+    let best = null; dishStats.forEach((d) => { const v = d.by[c.id]; if (v != null && (!best || v > best.v)) best = { name: d.name || "#" + d.code, v }; });
+    return { crit: c.shortName || c.name, name: best ? best.name : "—", v: best ? best.v : "" };
+  });
+  // People's Choice
+  const rankByCode = Object.fromEntries(rows.map((r) => [r.code, r.place]));
+  const pcCfg = (aw && aw.peoples) || {};
+  const pc = peoplesRanking(teams, peoples || {});
+  const pcOn = !!pcCfg.enabled && pc.some((r) => r.count > 0);
+  const pcUnit = pcCfg.unit || "votes";
+  const pcTopN = pcCfg.topN || 3;
+  const pcWin = pc[0];
+  const pcAgree = pcOn && pcWin && win.code === pcWin.code;
 
   const iconURL = await loadImgDataURL("icons/icon-512.png");
   const { jsPDF } = window.jspdf;
@@ -243,6 +292,22 @@ export async function buildReportDoc(ev, scores, peoples, aw) {
     center: [0, 2, 3, 4, 5, 6, 7], fs: 9, rowH: 19, boldCol: 4, badges: lbBadges,
   });
 
+  // ---------- PAGE: PEOPLE'S CHOICE (only if enabled & has votes) ----------
+  if (pcOn) {
+    y = newPage();
+    y = h1("People's Choice", y);
+    const pcNote = pcAgree
+      ? `The judges' champion and the crowd favorite were the same dish — ${win.name || "#" + win.code} swept both.`
+      : `The judges crowned ${win.name || "#" + win.code}; the crowd's favorite was ${pcWin.name || "#" + pcWin.code}, which placed ${ordinal(rankByCode[pcWin.code])} on the judges' board.`;
+    y = para(`Ranked by ${pcUnit.toLowerCase()} counted at each dish — the crowd's vote, tallied separately from the judges. Top ${pcTopN} take the award. ${pcNote}`, y, 10.3);
+    const pcListed = pc.filter((r) => r.count > 0);
+    const pcPng = chPeoples(pcListed.slice(0, 10), pcUnit);
+    addImg(pcPng, M, y, U); y += U * pcPng.h / pcPng.w + 16;
+    const pcBody = pcListed.slice(0, Math.max(pcTopN, 10)).map((r) => [String(r.place), r.name || "#" + r.code, r.table || "", String(r.count), rankByCode[r.code] ? ordinal(rankByCode[r.code]) : "—"]);
+    const pcBadges = {}; pcListed.slice(0, 3).forEach((r, i) => { pcBadges[i] = [RPT.goldm, RPT.silver, RPT.bronze][i]; });
+    y = drawTable(y, [40, 250, 60, 96, 72], ["#", "Dish / Team", "Table", pcUnit, "Judges' rank"], pcBody, { center: [0, 2, 3, 4], fs: 9.5, rowH: 20, badges: pcBadges });
+  }
+
   // ---------- PAGE: ANALYTICS ----------
   y = newPage();
   y = h1("The judging, in analytics", y);
@@ -272,12 +337,15 @@ export async function buildReportDoc(ev, scores, peoples, aw) {
   const shortVerdict = (v) => ({ "strong consensus": "tight", "some disagreement": "mixed", "divisive": "split", "single judge": "1 judge" }[v] || rclip(v || "", 8));
   const ddCols = [26, 150, ...criteria.map(() => (U - 26 - 150 - 46 - 56) / criteria.length), 46, 56];
   const ddBody = rows.map((r) => {
-    const d = dishAnalytics(criteria, teams, scores, r.code);
-    const by = Object.fromEntries((d.perCriterion || []).map((p) => [p.id, p.avg]));
-    return [String(r.place), r.name || "#" + r.code, ...criteria.map((c) => String(by[c.id] ?? 0)), String(d.judgeSpread ?? ""), shortVerdict(d.verdict)];
+    const d = dsByCode[r.code] || { by: {}, spread: "", verdict: "" };
+    return [String(r.place), r.name || "#" + r.code, ...criteria.map((c) => String(d.by[c.id] ?? 0)), String(d.spread ?? ""), shortVerdict(d.verdict)];
   });
   y = drawTable(y, ddCols, ["#", "Dish / Team", ...sh, "Spread", "Read"], ddBody, { center: [0, ...criteria.map((_, i) => i + 2), criteria.length + 2, criteria.length + 3], fs: 8.5, rowH: 18, badges: lbBadges });
   y += 14;
+  setF("bold", 12.5); setC(RPT.ink); T("Highlights", M, y); y += 16;
+  y = para("Criterion champions — " + critChamp.map((c) => `${c.crit}: ${c.name} (${c.v})`).join("   ·   "), y, 8.8, RPT.ink);
+  if (divisive && tightest) y = para(`Most divisive dish: ${divisive.name || "#" + divisive.code} (judge spread ${divisive.spread}). Tightest consensus: ${tightest.name || "#" + tightest.code} (spread ${tightest.spread}).`, y, 8.8, RPT.ink);
+  y += 6;
   setF("bold", 12.5); setC(RPT.ink); T("How scoring works", M, y); y += 16;
   const wline = equalW ? `all ${criteria.length} criteria carried equal weight (${wpct(criteria[0])}% each)` : criteria.map((c) => `${c.name} ${wpct(c)}%`).join(", ");
   y = para(`Criteria & weights: ${wline}.`, y, 8.4, RPT.muted);

@@ -768,6 +768,12 @@ async function renderAdmin(preloaded) {
           <option value="dropoff"${dm === "dropoff" ? " selected" : ""}>Participant delivers the dish to the judging area</option>
         </select>
       </label>
+      <label>Official ranking method <small class="lblhint">decides the winner &amp; drives the PDF report</small>
+        <select id="a_official">
+          <option value="scaled"${ev.officialMethod === "minmax" ? "" : " selected"}>Scaled — every judge's weighted scores summed</option>
+          <option value="minmax"${ev.officialMethod === "minmax" ? " selected" : ""}>Min-Max — drop each dish's single high &amp; low first</option>
+        </select>
+      </label>
       <div class="row">
         <label>Serving start <input id="a_start" type="time" value="${esc(
           ev.schedule?.startTime || "13:00"
@@ -1154,6 +1160,7 @@ async function renderAdmin(preloaded) {
     ev.eventDate = $("#a_date").value || "";
     ev.venue = $("#a_venue").value.trim();
     ev.deliveryMode = $("#a_delivery").value === "dropoff" ? "dropoff" : "runner";
+    ev.officialMethod = $("#a_official").value === "minmax" ? "minmax" : "scaled";
     ev.schedule = {
       startTime: $("#a_start").value || "13:00",
       intervalMin: parseInt($("#a_int").value) || 5,
@@ -2457,6 +2464,7 @@ function blankEvent(id) {
     eventDate: "",
     venue: "",
     deliveryMode: "runner", // runner = a runner picks up; dropoff = participant delivers
+    officialMethod: "scaled", // scaled | minmax — decides the winner & the PDF report ranking
     criteria: [],
     judges: [],
     teams: [],
