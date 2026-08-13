@@ -165,22 +165,40 @@ function beginRender() {
 }
 const isStale = (t) => t !== renderToken;
 
+// App-level passcodes: gate the organizer surfaces so judges' phones can't
+// reach them. Results = 8899; Setup / My events / Event checklist = 7731.
+// Unlocked per session (resets on full reload); one prompt per area.
+const APP_CODES = { results: "8899", admin: "7731" };
+const appUnlocked = { results: false, admin: false };
+function requireCode(kind, fn) {
+  if (appUnlocked[kind]) return fn();
+  const label = kind === "results" ? "Results passcode" : "Organizer passcode";
+  return gate(label, (val) => {
+    if (val === APP_CODES[kind]) {
+      appUnlocked[kind] = true;
+      // also satisfy the per-event gates so we don't double-prompt
+      if (kind === "results") resultsUnlocked = true; else adminUnlocked = true;
+      render();
+    } else alert("Wrong passcode.");
+  });
+}
+
 async function render() {
   beginRender();
   const { path, params } = parseRoute();
   if (params.get("event")) LS.setActiveEvent(params.get("event"));
   // Home renders instantly. Data views call loadEvent(), which awaits auth
   // internally for real events and returns instantly for demo mode.
-  if (path === "/admin") return renderAdmin();
+  if (path === "/admin") return requireCode("admin", renderAdmin);
   if (path === "/judge") return renderJudge(params);
-  if (path === "/results") return renderResults();
+  if (path === "/results") return requireCode("results", renderResults);
   if (path === "/judges") return renderJudgesDB();
   if (path === "/history") return renderHistory("events");
   if (path === "/participants") return renderHistory("restaurants");
   if (path === "/runner") return renderRunner();
   if (path === "/instructions") return renderInstructions();
-  if (path === "/checklist") return renderChecklist();
-  if (path === "/events") return renderEvents();
+  if (path === "/checklist") return requireCode("admin", renderChecklist);
+  if (path === "/events") return requireCode("admin", renderEvents);
   if (path === "/sample") return renderSample();
   if (path === "/menu") return renderHome();
   return renderLanding();
