@@ -1,6 +1,6 @@
 // sw.js — app-shell caching so tasteoff boots and runs offline.
 // Firestore handles its own offline data sync; this SW only caches the code/assets.
-const VERSION = "tasteoff-v28";
+const VERSION = "tasteoff-v29";
 const SHELL = [
   "./",
   "./index.html",
@@ -81,9 +81,10 @@ self.addEventListener("fetch", (e) => {
   }
 
   // App shell (our own files): NETWORK-FIRST so online users always get the
-  // latest deploy; fall back to cache only when offline.
+  // latest deploy; fall back to cache only when offline. `cache: "reload"`
+  // bypasses the browser's HTTP cache (iOS holds stale app.js otherwise).
   e.respondWith(
-    fetch(req)
+    fetch(req, { cache: "reload" })
       .then((res) => {
         const copy = res.clone();
         caches.open(VERSION).then((c) => c.put(req, copy)).catch(() => {});
