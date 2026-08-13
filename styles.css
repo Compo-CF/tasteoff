@@ -180,6 +180,7 @@ button { font: inherit; cursor: pointer; }
 .evcardacts .mini { text-decoration: none; display: inline-flex; align-items: center; }
 
 /* team-row contact inputs (menu collection) */
+.trow-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .trow .tcn { grid-column: 1 / 4; }
 .trow .tce { grid-column: 4 / -1; }
 @media (max-width: 560px) {

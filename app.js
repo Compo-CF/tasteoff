@@ -1004,7 +1004,7 @@ async function renderAdmin(preloaded) {
   const tSec = el(`<section class="panel"><div class="phead"><h3>Teams &amp; blind codes</h3><button class="mini" id="addT">+ add</button></div>
     <p class="hint">Judges see the <b>code</b> only — team names stay hidden until results.</p>
     <div id="tList"></div>
-    <button class="mini" id="autoCode">Auto-fill codes &amp; serve times</button></section>`);
+    <div class="trow-actions"><button class="mini" id="autoCode">Auto-fill codes &amp; serve times</button><button class="mini" id="shuffleT">🔀 Shuffle dish order</button></div></section>`);
   c.appendChild(tSec);
   const tList = $("#tList", tSec);
   function drawTeams() {
@@ -1064,6 +1064,27 @@ async function renderAdmin(preloaded) {
       });
     });
     drawTeams();
+  };
+  $("#shuffleT", tSec).onclick = () => {
+    readTeams();
+    readMeta();
+    if (!ev.teams.length) { alert("Add teams first."); return; }
+    if (!confirm("Shuffle the dish order? This randomizes each table's dish #, blind code and serve time.")) return;
+    ["A", "B"].forEach((tbl) => {
+      const list = ev.teams.filter((t) => (t.table || "A") === tbl);
+      for (let i = list.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [list[i], list[j]] = [list[j], list[i]];
+      }
+      list.forEach((t, idx) => {
+        t.dishNumber = idx + 1;
+        t.code = `${tbl}${String(idx + 1).padStart(2, "0")}`;
+        t.serveTime = addMinutes(ev.schedule.startTime, idx * ev.schedule.intervalMin);
+      });
+    });
+    ev.teams.sort((a, b) => String(a.table || "A").localeCompare(String(b.table || "A")) || (a.dishNumber || 0) - (b.dishNumber || 0));
+    drawTeams();
+    toast("🔀 Dish order shuffled — codes & times reassigned. Save to keep it.");
   };
   drawTeams();
 
@@ -1976,9 +1997,8 @@ async function renderRunner() {
   const rows = teams
     .map(
       (t) => `<tr>
-        <td class="rt">${esc(t.serveTime || "—")}</td>
+        <td class="rt">${esc(fmt12(t.serveTime))}</td>
         <td class="tb">${t.dishNumber ?? ""}</td>
-        <td class="rc">${esc(t.code)}</td>
         <td>${esc(t.name || "")}</td>
         ${t.dishDescription ? `<td class="rd">${esc(t.dishDescription)}</td>` : "<td></td>"}
       </tr>`
@@ -1988,8 +2008,8 @@ async function renderRunner() {
     <div class="jbar noprint"><a class="back" href="#/menu">←</a><div class="who">${esc(ev.name || "Runner sheet")}</div>
       <button class="mini" id="print">Print</button></div>
     <h2 class="runner-h">Runner sheet — pickup schedule</h2>
-    <p class="sub confidential noprint">🔒 Confidential — reveals the blind code → joint key. Do not show judges.</p>
-    <table class="runner-table"><thead><tr><th>Pickup</th><th>Dish #</th><th>Code</th><th>Joint</th><th>Dish</th></tr></thead>
+    <p class="sub noprint">Pickup order for runners — team names &amp; times only (no blind codes). Safe to hand out.</p>
+    <table class="runner-table"><thead><tr><th>Pickup</th><th>Dish #</th><th>Team</th><th>Dish</th></tr></thead>
       <tbody>${rows}</tbody></table>
   </div>`);
   $("#print", c).onclick = () => window.print();
@@ -2260,4 +2280,14 @@ function addMinutes(hhmm, mins) {
   const d = new Date();
   d.setHours(h, m + mins, 0, 0);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+// 24h "HH:MM" -> 12h "H:MM AM/PM" for human-facing sheets.
+function fmt12(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm || "");
+  if (!m) return hhmm || "—";
+  let h = +m[1];
+  const ap = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${h}:${m[2]} ${ap}`;
 }
