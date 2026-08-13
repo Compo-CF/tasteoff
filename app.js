@@ -177,6 +177,7 @@ async function render() {
   if (path === "/history") return renderHistory("events");
   if (path === "/participants") return renderHistory("restaurants");
   if (path === "/runner") return renderRunner();
+  if (path === "/instructions") return renderInstructions();
   if (path === "/checklist") return renderChecklist();
   if (path === "/events") return renderEvents();
   if (path === "/sample") return renderSample();
@@ -1206,6 +1207,12 @@ function showLinks(ev, box) {
       runurl
     )}" onclick="this.select()"></div>`)
   );
+  const insturl = `${base}#/instructions?event=${encodeURIComponent(ev.id)}`;
+  box.appendChild(
+    el(`<div class="linkcard"><h4>Participant instructions</h4><input readonly value="${esc(
+      insturl
+    )}" onclick="this.select()"><a class="mini" href="#/instructions?event=${encodeURIComponent(ev.id)}">Open &amp; print →</a></div>`)
+  );
 }
 
 function makeQR(container, text) {
@@ -1472,7 +1479,7 @@ async function renderResults() {
   const c = el(`<div class="wrap results"></div>`);
   c.appendChild(el(`<div class="jbar"><a class="back" href="#/menu">←</a><div class="who">${esc(
     ev.name || "Results"
-  )}</div><a class="mini" href="#/runner?event=${encodeURIComponent(ev.id)}">Runner sheet</a><button class="mini" id="csv">export CSV</button></div>`));
+  )}</div><a class="mini" href="#/runner?event=${encodeURIComponent(ev.id)}">Runner sheet</a><a class="mini" href="#/instructions?event=${encodeURIComponent(ev.id)}">Participant instructions</a><button class="mini" id="csv">export CSV</button></div>`));
   const aw = eventAwards(ev);
   const pcTab = aw.peoples.enabled
     ? `<button class="tab" data-tab="peoples">People's Choice</button>`
@@ -2011,6 +2018,53 @@ async function renderRunner() {
     <p class="sub noprint">Pickup order for runners — team names &amp; times only (no blind codes). Safe to hand out.</p>
     <table class="runner-table"><thead><tr><th>Pickup</th><th>Dish #</th><th>Team</th><th>Dish</th></tr></thead>
       <tbody>${rows}</tbody></table>
+  </div>`);
+  $("#print", c).onclick = () => window.print();
+  app().replaceChildren(c);
+}
+
+// ---------- PARTICIPANT INSTRUCTIONS (printable, one card per team) ----------
+async function renderInstructions() {
+  const myToken = renderToken;
+  const eventId = LS.activeEvent();
+  const ev = await loadEvent(eventId);
+  if (isStale(myToken)) return;
+  if (!ev) {
+    app().replaceChildren(el(`<div class="wrap"><a class="back" href="#/menu">← home</a><p class="empty">No event found.</p></div>`));
+    return;
+  }
+  const judges = ev.judges || [];
+  const judgesAt = (tbl) => judges.filter((j) => (j.table || "A") === (tbl || "A")).length;
+  const teams = [...(ev.teams || [])].sort(
+    (a, b) => (a.dishNumber || 0) - (b.dishNumber || 0) || String(a.serveTime).localeCompare(String(b.serveTime))
+  );
+  const cards = teams
+    .map((t) => {
+      const jn = judgesAt(t.table);
+      const portions = jn + 1;
+      const portionLine = jn > 0
+        ? `Bring <b>${portions} portions</b> of your dish — one for each of the ${jn} judge${jn === 1 ? "" : "s"} at your table, <b>plus one for photography</b>.`
+        : `Bring <b>one portion per judge plus one extra</b> for photography.`;
+      return `<section class="pi-card">
+        <div class="pi-head"><span class="pi-brand">🔥 ${esc(ev.name || "Competition")}</span><span class="pi-tag">Participant instructions</span></div>
+        <h2 class="pi-name">${esc(t.name || "Participant")}</h2>
+        <div class="pi-meta">
+          <div><span class="pi-lbl">Your dish</span><span class="pi-val">${esc(t.dishDescription || "—")}</span></div>
+          <div><span class="pi-lbl">Entry / serving time</span><span class="pi-val">${esc(fmt12(t.serveTime))}</span></div>
+        </div>
+        <div class="pi-rules">
+          <div class="pi-rule"><span class="pi-num">1</span><p>${portionLine}</p></div>
+          <div class="pi-rule"><span class="pi-num">2</span><p><b>No identifying marks.</b> Your dish and its servingware must carry <b>no logos, brands, names, stickers, signature garnishes or anything</b> that could identify you. Judging is 100% blind.</p></div>
+          <div class="pi-rule"><span class="pi-num">3</span><p><b>Be ready at your time.</b> Have all portions plated and ready at your entry time — a runner will collect your dish and deliver it to the judges under a blind code.</p></div>
+        </div>
+      </section>`;
+    })
+    .join("");
+  const c = el(`<div class="wrap instructions">
+    <div class="jbar noprint"><a class="back" href="#/menu">←</a><div class="who">${esc(ev.name || "Participant instructions")}</div>
+      <button class="mini" id="print">Print all</button></div>
+    <p class="sub noprint">One instruction sheet per participant — print and hand out. Each shows their dish, entry time, portion count (judges + 1) and the blind-judging rules.</p>
+    ${teams.length ? cards : `<p class="empty">No participants yet — add teams in Set up event.</p>`}
   </div>`);
   $("#print", c).onclick = () => window.print();
   app().replaceChildren(c);
