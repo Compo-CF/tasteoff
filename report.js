@@ -104,6 +104,7 @@ function rdate(iso) {
   return `${MON[+m[2] - 1]} ${+m[3]}, ${m[1]}`;
 }
 function ordinal(n) { if (!n) return "unranked"; const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+function fmt12t(h) { const m = /^(\d{1,2}):(\d{2})/.exec(h || ""); if (!m) return "—"; let hh = +m[1]; const ap = hh >= 12 ? "PM" : "AM"; hh = hh % 12 || 12; return `${hh}:${m[2]} ${ap}`; }
 // Mirrors app.js peoplesRanking: rank teams by crowd count, unplaced when 0.
 function peoplesRanking(teams, counts) {
   const rows = (teams || []).map((t) => ({ code: t.code, name: t.name, table: t.table, count: Number((counts || {})[t.code]) || 0 }));
@@ -197,6 +198,8 @@ export async function buildReportDoc(ev, scores, peoples, aw) {
     return tw + doc.getTextWidth("off");
   };
   const addImg = (png, x, y, w) => doc.addImage(png.data, "PNG", x, y, w, w * png.h / png.w);
+  // truncate a string to fit width w (pt) in the CURRENT font, adding an ellipsis
+  const fit = (s, w) => { s = String(s ?? ""); if (doc.getTextWidth(s) <= w) return s; while (s.length && doc.getTextWidth(s + "…") > w) s = s.slice(0, -1); return s + "…"; };
 
   // ---------- COVER ----------
   fill(RPT.brick); doc.rect(0, 0, PW, PH, "F");
@@ -242,7 +245,7 @@ export async function buildReportDoc(ev, scores, peoples, aw) {
     const totalW = colW.reduce((a, b) => a + b, 0);
     const header = () => {
       fill(hbg); doc.rect(M, y, totalW, rowH + 3, "F"); setF("bold", fs); setC(hfg);
-      let cx = M; headers.forEach((h, ci) => { const c = center.includes(ci); T(rclip(h, 22), c ? cx + colW[ci] / 2 : cx + 6, y + rowH - 4, c ? { align: "center" } : undefined); cx += colW[ci]; });
+      let cx = M; headers.forEach((h, ci) => { const c = center.includes(ci); T(fit(h, colW[ci] - 10), c ? cx + colW[ci] / 2 : cx + 6, y + rowH - 4, c ? { align: "center" } : undefined); cx += colW[ci]; });
       y += rowH + 3;
     };
     header();
@@ -256,7 +259,7 @@ export async function buildReportDoc(ev, scores, peoples, aw) {
         const c = center.includes(ci);
         if (badges[ri] && ci === 0) { setF("bold", fs + 3); setC("#FFFFFF"); }
         else { setF((ci === boldCol || (ci === nameBold)) ? "bold" : "normal", fs); setC(RPT.ink); }
-        T(rclip(cell, ci === 1 ? 30 : 22), c ? cx + colW[ci] / 2 : cx + 6, y + rowH - 6, c ? { align: "center" } : undefined);
+        T(fit(cell, colW[ci] - 10), c ? cx + colW[ci] / 2 : cx + 6, y + rowH - 6, c ? { align: "center" } : undefined);
         cx += colW[ci];
       });
       drawc(RPT.line); doc.setLineWidth(0.5); doc.line(M, y + rowH, M + totalW, y + rowH);
@@ -281,6 +284,42 @@ export async function buildReportDoc(ev, scores, peoples, aw) {
   });
   y += 16;
   addImg(chLeaderboard(rows, primary, PN), M, y, U);
+
+  // ---------- PAGE: COMPETITION SETUP ----------
+  y = newPage();
+  y = h1("Competition setup", y);
+  y = para("The conditions this competition was scored under.", y, 9.6);
+  const methodDetail = primary === "minmax"
+    ? "Min-Max — drop each dish's single high & low, then sum weighted scores"
+    : "Scaled — sum every judge's weighted 1–5 scores";
+  const deliveryDetail = ev.deliveryMode === "dropoff"
+    ? "Participant delivers the dish to the judging area"
+    : "A runner picks up the dish at the serving time";
+  const pcDetail = pcCfg.enabled ? `On — "${pcCfg.unit || "votes"}", top ${pcCfg.topN || 3}` : "Off";
+  const statusLabel = { draft: "Draft — planning", live: "Live — happening", done: "Done — completed" }[ev.status] || (ev.status || "—");
+  const setupRows = [
+    ["Event", ev.name || "—"],
+    ["Date", rdate(ev.eventDate) || "—"],
+    ["Venue", ev.venue || "—"],
+    ["Status", statusLabel],
+    ["Official ranking method", methodDetail],
+    ["Dish delivery", deliveryDetail],
+    ["Serving start", fmt12t(ev.schedule && ev.schedule.startTime)],
+    ["Serving interval", ev.schedule && ev.schedule.intervalMin ? ev.schedule.intervalMin + " min between dishes" : "—"],
+    ["Judges", String(judges.length)],
+    ["Dishes / teams", String(teams.length)],
+    ["Score sheets submitted", String(scores.length)],
+    ["Field average", ea.fieldAvg + " / 5"],
+    ["Judges' Choice", "Top " + ((aw && aw.judgesTopN) || 3)],
+    ["People's Choice", pcDetail],
+  ];
+  y = drawTable(y, [172, U - 172], ["Setting", "Detail"], setupRows, { fs: 9.5, rowH: 19, nameBold: 0 });
+  y += 18;
+  setF("bold", 12.5); setC(RPT.ink); T("Criteria & weights", M, y); y += 15;
+  const noteW = (U - 150 - 62) / 2;
+  const critRows = criteria.map((c) => [c.name, wpct(c) + "%", c.low || "—", c.high || "—"]);
+  y = drawTable(y, [150, 62, noteW, noteW], ["Criterion", "Weight", "Low note (score 1)", "High note (score 5)"], critRows, { fs: 9, rowH: 19, center: [1], nameBold: 0 });
+  if (equalW) y = para(`All criteria carry equal weight (${wpct(criteria[0])}% each) — every facet counts the same toward the final score.`, y + 8, 8.6, RPT.muted);
 
   // ---------- PAGE: FULL LEADERBOARD ----------
   y = newPage();
