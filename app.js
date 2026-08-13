@@ -1537,7 +1537,7 @@ async function renderResults() {
   const c = el(`<div class="wrap results"></div>`);
   c.appendChild(el(`<div class="jbar"><a class="back" href="#/menu">←</a><div class="who">${esc(
     ev.name || "Results"
-  )}</div><a class="mini" href="#/runner?event=${encodeURIComponent(ev.id)}">Runner sheet</a><a class="mini" href="#/instructions?event=${encodeURIComponent(ev.id)}">Participant instructions</a><button class="mini" id="csv">export CSV</button></div>`));
+  )}</div><a class="mini" href="#/runner?event=${encodeURIComponent(ev.id)}">Runner sheet</a><a class="mini" href="#/instructions?event=${encodeURIComponent(ev.id)}">Participant instructions</a><button class="mini" id="xlsx">⬇ Export Excel</button><button class="mini" id="csv">CSV</button></div>`));
   const aw = eventAwards(ev);
   const pcTab = aw.peoples.enabled
     ? `<button class="tab" data-tab="peoples">People's Choice</button>`
@@ -1626,6 +1626,7 @@ async function renderResults() {
   }
 
   $("#csv", c).onclick = () => exportCSV(ev, latestScores, latestPeoples, aw);
+  $("#xlsx", c).onclick = () => exportXLSX(ev, latestScores, latestPeoples, aw);
 }
 
 // Winners banner: Judges' Choice top N (both methods) + People's Choice top N.
@@ -1881,6 +1882,110 @@ function exportCSV(ev, scores, peoples, aw) {
   a.href = URL.createObjectURL(blob);
   a.download = `${ev.id}-results.csv`;
   a.click();
+}
+
+// Full post-event workbook: setup, judges, tally totals, dish detail,
+// participants, raw scores and analytics — one sheet each.
+function exportXLSX(ev, scores, peoples, aw) {
+  const XLSX = window.XLSX;
+  if (!XLSX) { alert("Spreadsheet library still loading — try again in a moment."); return; }
+  aw = aw || eventAwards(ev);
+  scores = scores || [];
+  const criteria = ev.criteria || [];
+  const teams = ev.teams || [];
+  const judges = ev.judges || [];
+  const nameOf = Object.fromEntries(judges.map((j) => [j.id, j.name]));
+  const teamByCode = Object.fromEntries(teams.map((t) => [t.code, t]));
+  const { scaled, minmax } = computeLeaderboards(criteria, teams, scores);
+  const mmByCode = Object.fromEntries(minmax.map((r) => [r.code, r]));
+  const pc = peoplesRanking(teams, peoples || {});
+  const pcByCode = Object.fromEntries(pc.map((r) => [r.code, r]));
+  const ea = eventAnalytics(criteria, teams, scores);
+  const jById = Object.fromEntries(ea.judges.map((j) => [j.judgeId, j]));
+  const tsStr = (t) => {
+    const ms = t && t.seconds ? t.seconds * 1000 : typeof t === "number" ? t : null;
+    return ms ? new Date(ms).toLocaleString() : "";
+  };
+  const wb = XLSX.utils.book_new();
+  const add = (name, aoa) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), name.slice(0, 31));
+
+  // 1) Event + criteria
+  add("Event", [
+    ["tasteoff — event export"],
+    ["Event", ev.name || ""], ["Event ID", ev.id || ""], ["Date", ev.eventDate || ""],
+    ["Venue", ev.venue || ""], ["Status", ev.status || ""],
+    ["Dish delivery", ev.deliveryMode === "dropoff" ? "Participant delivers to judging area" : "Runner picks up at serving time"],
+    ["Official method", ev.officialMethod || "(both shown)"],
+    ["Serving start", fmt12(ev.schedule && ev.schedule.startTime)],
+    ["Interval (min)", (ev.schedule && ev.schedule.intervalMin) || ""],
+    ["People's Choice", aw.peoples.enabled ? `On — "${aw.peoples.unit}", top ${aw.peoples.topN}` : "Off"],
+    ["Judges' Choice — top N", aw.judgesTopN],
+    ["Teams / dishes", teams.length], ["Judges", judges.length],
+    ["Score sheets submitted", scores.length], ["Field average (1–5)", ea.fieldAvg],
+    ["Exported", new Date().toLocaleString()],
+    [], ["Criteria & weights"], ["Criterion", "Weight %", "Low note", "High note"],
+    ...criteria.map((c) => [c.name, Math.round((c.weight || 0) * 100), c.low || "", c.high || ""]),
+  ]);
+
+  // 2) Judges (setup + behavior this event)
+  const jAoa = [["Judge", "Table", "Ballots", "Avg (1–5)", "Generosity", "Std dev (σ)"]];
+  judges.forEach((j) => { const a = jById[j.id] || {}; jAoa.push([j.name, j.table || "", a.n ?? 0, a.avg ?? "", a.generosity ?? "", a.spread ?? ""]); });
+  ea.judges.forEach((a) => { if (!judges.some((j) => j.id === a.judgeId)) jAoa.push([nameOf[a.judgeId] || a.judgeId, "", a.n, a.avg, a.generosity, a.spread]); });
+  add("Judges", jAoa);
+
+  // 3) Leaderboard / tally totals
+  const lbHead = ["Place (Scaled)", "Place (Min-Max)", "Code", "Team", "Table", "Dish #", "Scaled", "Min-Max", "Judges", "#5s"];
+  if (aw.peoples.enabled) lbHead.push(aw.peoples.unit, "Place (People's)");
+  lbHead.push("Tiebroken?");
+  const lbAoa = [lbHead];
+  scaled.forEach((r) => {
+    const mm = mmByCode[r.code] || {};
+    const row = [r.place ?? "", mm.place ?? "", r.code, r.name || "", r.table || "", r.dishNumber ?? "", r.scaled, r.minmax, r.judgeCount, r.fives ?? ""];
+    if (aw.peoples.enabled) { const p = pcByCode[r.code] || {}; row.push(p.count ?? 0, p.place ?? ""); }
+    row.push(r.tieBroken ? "yes" : "");
+    lbAoa.push(row);
+  });
+  add("Leaderboard", lbAoa);
+
+  // 4) Dish detail — per-criterion averages + consensus
+  const ddAoa = [["Code", "Team", "Table", "Dish #", ...criteria.map((c) => c.shortName || c.name), "Judge spread σ", "Verdict"]];
+  teams.forEach((t) => {
+    const d = dishAnalytics(criteria, teams, scores, t.code);
+    const byId = Object.fromEntries(d.perCriterion.map((p) => [p.id, p.avg]));
+    ddAoa.push([t.code, t.name || "", t.table || "", t.dishNumber ?? "", ...criteria.map((c) => byId[c.id] ?? ""), d.judgeSpread ?? "", d.verdict || ""]);
+  });
+  add("Dish detail", ddAoa);
+
+  // 5) Participants
+  const pAoa = [["Code", "Team", "Table", "Dish #", "Serve/pickup time", "Dish description", "Contact name", "Contact email"]];
+  [...teams].sort((a, b) => (a.dishNumber || 0) - (b.dishNumber || 0)).forEach((t) =>
+    pAoa.push([t.code, t.name || "", t.table || "", t.dishNumber ?? "", fmt12(t.serveTime), t.dishDescription || "", t.contactName || "", t.contactEmail || ""]));
+  add("Participants", pAoa);
+
+  // 6) Raw scores (judge × dish × criterion)
+  const rsAoa = [["Judge", "Table", "Code", "Team", "Dish #", ...criteria.map((c) => c.shortName || c.name), "Submitted"]];
+  scores.forEach((s) => {
+    const t = teamByCode[s.teamCode] || {};
+    const cs = s.criterionScores || {};
+    rsAoa.push([s.judgeName || nameOf[s.judgeId] || s.judgeId, s.table || t.table || "", s.teamCode, t.name || "", t.dishNumber ?? "", ...criteria.map((c) => cs[c.id] ?? ""), tsStr(s.submittedAt)]);
+  });
+  add("Raw scores", rsAoa);
+
+  // 7) Analytics
+  add("Analytics", [
+    ["Event analytics"],
+    ["Field average (1–5)", ea.fieldAvg], ["Score sheets", ea.totalSheets],
+    ["Strongest facet", ea.strongest ? `${ea.strongest.name} (${ea.strongest.avg})` : ""],
+    ["Weakest facet", ea.weakest ? `${ea.weakest.name} (${ea.weakest.avg})` : ""],
+    [], ["Per-criterion average"], ["Criterion", "Avg", "n"],
+    ...ea.perCriterion.map((c) => [c.name, c.avg, c.n]),
+    [], ["Score distribution (1–5)"], ["Score", "Count"],
+    ...ea.distribution.map((d) => [d.score, d.count]),
+    [], ["Judge behavior"], ["Judge", "Ballots", "Avg", "Generosity", "Std dev σ"],
+    ...ea.judges.map((j) => [nameOf[j.judgeId] || j.judgeId, j.n, j.avg, j.generosity, j.spread]),
+  ]);
+
+  XLSX.writeFile(wb, `${ev.id || "event"}-export.xlsx`);
 }
 
 // ---------- JUDGES DATABASE ----------
