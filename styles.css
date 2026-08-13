@@ -208,7 +208,10 @@ input, select {
 
 .crow, .jrow, .trow { display: grid; gap: 6px; align-items: center; margin-bottom: 8px; }
 .crow { grid-template-columns: 1.4fr 60px 1.3fr 1.3fr 32px; }
-.jrow { grid-template-columns: 1fr 110px 32px; }
+.jrow { grid-template-columns: 22px 1fr 110px 32px; }
+.jdrag { cursor: grab; color: var(--muted); font-size: 18px; line-height: 1; text-align: center; user-select: none; }
+.jdrag:active { cursor: grabbing; }
+.jrow.dragover { outline: 2px dashed var(--brand); outline-offset: 2px; border-radius: 8px; }
 .trow { grid-template-columns: 70px 1fr 52px 52px 90px 32px; }
 .crow input, .jrow input, .trow input, .jrow select, .trow select { margin-top: 0; }
 .trow .tdd { grid-column: 1 / -1; }

@@ -963,6 +963,13 @@ async function renderAdmin(preloaded) {
   critList.addEventListener("input", (e) => {
     if (e.target.classList.contains("cw")) updateWTotal();
   });
+  // When a weight is committed, re-order criteria high → low weight.
+  critList.addEventListener("change", (e) => {
+    if (!e.target.classList.contains("cw")) return;
+    readCrit();
+    ev.criteria.sort((a, b) => (b.weight || 0) - (a.weight || 0));
+    drawCrit();
+  });
   $("#addCrit", critSec).onclick = () => {
     readCrit();
     ev.criteria.push({ id: uid("c"), name: "", shortName: "", weight: 0, low: "", high: "" });
@@ -979,6 +986,7 @@ async function renderAdmin(preloaded) {
     ev.judges.forEach((j, i) => {
       const row = el(`
         <div class="jrow" data-i="${i}">
+          <span class="jdrag" draggable="true" title="Drag to reorder">⠿</span>
           <input class="jn" placeholder="Judge name" value="${esc(j.name)}">
           <select class="jt">
             <option value="A"${j.table === "A" ? " selected" : ""}>Table A</option>
@@ -993,6 +1001,48 @@ async function renderAdmin(preloaded) {
       jList.appendChild(row);
     });
   }
+  // Sync any unsaved name/table edits back into ev.judges (keeps ids), no filtering.
+  function syncJudgesFromDOM() {
+    [...jList.querySelectorAll(".jrow")].forEach((r) => {
+      const i = +r.dataset.i;
+      if (ev.judges[i]) {
+        ev.judges[i].name = r.querySelector(".jn").value;
+        ev.judges[i].table = r.querySelector(".jt").value;
+      }
+    });
+  }
+  let jDragFrom = null;
+  jList.addEventListener("dragstart", (e) => {
+    const h = e.target.closest(".jdrag");
+    if (!h) return;
+    jDragFrom = +h.closest(".jrow").dataset.i;
+    e.dataTransfer.effectAllowed = "move";
+    try { e.dataTransfer.setData("text/plain", String(jDragFrom)); } catch (err) {}
+  });
+  jList.addEventListener("dragover", (e) => {
+    if (jDragFrom === null) return;
+    e.preventDefault();
+    const row = e.target.closest(".jrow");
+    jList.querySelectorAll(".jrow.dragover").forEach((r) => r.classList.remove("dragover"));
+    if (row) row.classList.add("dragover");
+  });
+  jList.addEventListener("drop", (e) => {
+    if (jDragFrom === null) return;
+    e.preventDefault();
+    const row = e.target.closest(".jrow");
+    const to = row ? +row.dataset.i : ev.judges.length - 1;
+    syncJudgesFromDOM();
+    if (to !== jDragFrom && ev.judges[jDragFrom]) {
+      const [moved] = ev.judges.splice(jDragFrom, 1);
+      ev.judges.splice(to, 0, moved);
+    }
+    jDragFrom = null;
+    drawJudges();
+  });
+  jList.addEventListener("dragend", () => {
+    jDragFrom = null;
+    jList.querySelectorAll(".jrow.dragover").forEach((r) => r.classList.remove("dragover"));
+  });
   function readJudges() {
     ev.judges = [...jList.querySelectorAll(".jrow")]
       .map((r) => {
