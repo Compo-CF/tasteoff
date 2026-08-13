@@ -23,6 +23,7 @@ import { computeLeaderboards, SCORE_STEPS } from "./scoring.js";
 import { parseFile, parseGoogleSheet, workbookToTemplates } from "./import-sheet.js";
 import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles, eventsOverview, restaurantHistory, participantProfile, explainWinner } from "./analytics.js";
 import { barChart, divergingChart, histogram, radar } from "./charts.js";
+import { exportReportPDF } from "./report.js";
 
 // stable judge id from a name, so the same person links across events
 function judgeKey(name) {
@@ -1537,7 +1538,7 @@ async function renderResults() {
   const c = el(`<div class="wrap results"></div>`);
   c.appendChild(el(`<div class="jbar"><a class="back" href="#/menu">←</a><div class="who">${esc(
     ev.name || "Results"
-  )}</div><a class="mini" href="#/runner?event=${encodeURIComponent(ev.id)}">Runner sheet</a><a class="mini" href="#/instructions?event=${encodeURIComponent(ev.id)}">Participant instructions</a><button class="mini" id="xlsx">⬇ Export Excel</button><button class="mini" id="csv">CSV</button></div>`));
+  )}</div><a class="mini" href="#/runner?event=${encodeURIComponent(ev.id)}">Runner sheet</a><a class="mini" href="#/instructions?event=${encodeURIComponent(ev.id)}">Participant instructions</a><button class="mini primary" id="pdf">⬇ Report (PDF)</button><button class="mini" id="xlsx">Excel</button><button class="mini" id="csv">CSV</button></div>`));
   const aw = eventAwards(ev);
   const pcTab = aw.peoples.enabled
     ? `<button class="tab" data-tab="peoples">People's Choice</button>`
@@ -1627,6 +1628,7 @@ async function renderResults() {
 
   $("#csv", c).onclick = () => exportCSV(ev, latestScores, latestPeoples, aw);
   $("#xlsx", c).onclick = () => exportXLSX(ev, latestScores, latestPeoples, aw);
+  $("#pdf", c).onclick = () => exportReportPDF(ev, latestScores, latestPeoples, aw);
 }
 
 // Winners banner: Judges' Choice top N (both methods) + People's Choice top N.

@@ -1,6 +1,6 @@
 // sw.js — app-shell caching so tasteoff boots and runs offline.
 // Firestore handles its own offline data sync; this SW only caches the code/assets.
-const VERSION = "tasteoff-v23";
+const VERSION = "tasteoff-v24";
 const SHELL = [
   "./",
   "./index.html",
@@ -14,11 +14,13 @@ const SHELL = [
   "./scoring.js",
   "./analytics.js",
   "./charts.js",
+  "./report.js",
   "./import-sheet.js",
   "./sample-event.js",
   "./templates.js",
   "./vendor/qrcode.js",
   "./vendor/xlsx.full.min.js",
+  "./vendor/jspdf.umd.min.js",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
