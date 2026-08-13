@@ -745,6 +745,7 @@ async function renderAdmin(preloaded) {
 
   // --- identity + schedule ---
   const est = eventStatus(ev);
+  const dm = ev.deliveryMode === "dropoff" ? "dropoff" : "runner";
   const meta = el(`
     <section class="panel">
       <label>Event ID (URL slug) <input id="a_id" value="${esc(ev.id)}"></label>
@@ -760,6 +761,12 @@ async function renderAdmin(preloaded) {
         <label>Event date <input id="a_date" type="date" value="${esc(ev.eventDate || "")}"></label>
       </div>
       <label>Venue <input id="a_venue" placeholder="Venue / location" value="${esc(ev.venue || "")}"></label>
+      <label>Dish delivery
+        <select id="a_delivery">
+          <option value="runner"${dm === "runner" ? " selected" : ""}>A runner picks up the dish at the serving time</option>
+          <option value="dropoff"${dm === "dropoff" ? " selected" : ""}>Participant delivers the dish to the judging area</option>
+        </select>
+      </label>
       <div class="row">
         <label>Serving start <input id="a_start" type="time" value="${esc(
           ev.schedule?.startTime || "13:00"
@@ -1095,6 +1102,7 @@ async function renderAdmin(preloaded) {
     ev.status = $("#a_status").value || "draft";
     ev.eventDate = $("#a_date").value || "";
     ev.venue = $("#a_venue").value.trim();
+    ev.deliveryMode = $("#a_delivery").value === "dropoff" ? "dropoff" : "runner";
     ev.schedule = {
       startTime: $("#a_start").value || "13:00",
       intervalMin: parseInt($("#a_int").value) || 5,
@@ -2035,6 +2043,8 @@ async function renderInstructions() {
   }
   const judges = ev.judges || [];
   const judgesAt = (tbl) => judges.filter((j) => (j.table || "A") === (tbl || "A")).length;
+  const dropoff = ev.deliveryMode === "dropoff";
+  const timeLbl = dropoff ? "Deliver by" : "Pickup time";
   const teams = [...(ev.teams || [])].sort(
     (a, b) => (a.dishNumber || 0) - (b.dishNumber || 0) || String(a.serveTime).localeCompare(String(b.serveTime))
   );
@@ -2050,12 +2060,16 @@ async function renderInstructions() {
         <h2 class="pi-name">${esc(t.name || "Participant")}</h2>
         <div class="pi-meta">
           <div><span class="pi-lbl">Your dish</span><span class="pi-val">${esc(t.dishDescription || "—")}</span></div>
-          <div><span class="pi-lbl">Entry / serving time</span><span class="pi-val">${esc(fmt12(t.serveTime))}</span></div>
+          <div><span class="pi-lbl">${timeLbl}</span><span class="pi-val">${esc(fmt12(t.serveTime))}</span></div>
         </div>
         <div class="pi-rules">
           <div class="pi-rule"><span class="pi-num">1</span><p>${portionLine}</p></div>
           <div class="pi-rule"><span class="pi-num">2</span><p><b>No identifying marks.</b> Your dish and its servingware must carry <b>no logos, brands, names, stickers, signature garnishes or anything</b> that could identify you. Judging is 100% blind.</p></div>
-          <div class="pi-rule"><span class="pi-num">3</span><p><b>Be ready at your time.</b> Have all portions plated and ready at your entry time — a runner will collect your dish and deliver it to the judges under a blind code.</p></div>
+          <div class="pi-rule"><span class="pi-num">3</span><p>${
+            dropoff
+              ? `<b>Deliver on time.</b> Bring all portions to the <b>judging area</b> by your appointed time. Dishes are received under a blind code — late dishes may not be judged.`
+              : `<b>Be ready at your time.</b> Have all portions plated and ready at your pickup time — a <b>runner will collect</b> your dish and deliver it to the judges under a blind code.`
+          }</p></div>
         </div>
       </section>`;
     })
@@ -2285,6 +2299,7 @@ function blankEvent(id) {
     status: "draft", // draft | live | done — planning lifecycle
     eventDate: "",
     venue: "",
+    deliveryMode: "runner", // runner = a runner picks up; dropoff = participant delivers
     criteria: [],
     judges: [],
     teams: [],
