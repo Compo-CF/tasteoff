@@ -2076,6 +2076,37 @@ async function renderJudgesDB() {
   let sortDir = -1; // -1 desc, +1 asc (persists across event-type switches)
   let series = "__all__";
 
+  // Judge stats popup (mirrors the participant-details modal).
+  function showJudge(p) {
+    const gTag =
+      p.generosity > 0.15 ? `<span class="tag gen">generous +${p.generosity}</span>`
+      : p.generosity < -0.15 ? `<span class="tag harsh">harsh ${p.generosity}</span>`
+      : `<span class="tag neu">balanced</span>`;
+    const cTag =
+      p.consistency <= 0.8 ? `<span class="tag steady">very consistent</span>`
+      : p.consistency >= 1.4 ? `<span class="tag swingy">high spread</span>`
+      : `<span class="tag neu">typical spread</span>`;
+    const facets = Object.keys(p.perCriterion || {}).map((k) => ({ short: k, value: p.perCriterion[k] }));
+    const bars = facets.length ? barChart(facets.map((f) => ({ label: f.short, value: f.value })), { max: 5 }) : `<p class="hint">No per-criterion data.</p>`;
+    const rdr = facets.length >= 3 ? radar(facets, { max: 5 }) : "";
+    const ov = el(`<div class="modal-ov"><div class="modal wide">
+      <div class="dd-head"><h3>${esc(p.name)}</h3><button class="mini" id="jClose">close</button></div>
+      <p class="sub">${p.eventsJudged} event(s) · ${p.dishesScored} dishes scored</p>
+      <div class="jdb-stats">
+        <div><b>${p.avgScore || "—"}</b><span>avg score</span></div>
+        <div><b>${p.dishesScored ? (p.generosity > 0 ? "+" : "") + p.generosity : "—"}</b><span>vs field</span></div>
+        <div><b>${p.dishesScored ? p.consistency : "—"}</b><span>spread (σ)</span></div>
+      </div>
+      <div class="jdb-tags">${gTag}${cTag}</div>
+      <h4>By criterion</h4>
+      <div class="dd-cols">${rdr ? `<div class="dd-radar">${rdr}</div>` : ""}<div class="dd-bars">${bars}</div></div>
+    </div></div>`);
+    $("#jClose", ov).onclick = () => ov.remove();
+    ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+    document.addEventListener("keydown", function esc2(e) { if (e.key === "Escape") { ov.remove(); document.removeEventListener("keydown", esc2); } });
+    document.body.appendChild(ov);
+  }
+
   function render() {
     const evs = series === "__all__" ? events : events.filter((e) => seriesOf(e) === series);
     const profiles = judgeProfiles(rosterMap, evs, scoresByEvent);
@@ -2092,7 +2123,7 @@ async function renderJudgesDB() {
     // ---- Ranked leaderboard (sortable) ----
     const rankWrap = el(`<div class="jdb-rankwrap">
       <div class="jdb-rankhead"><h3>Rankings${series === "__all__" ? "" : " — " + esc(series)}</h3>
-        <span class="rk-note">field avg <b>${fieldAvg}</b> · tap a column to sort · vs field: + generous, − tough · σ: lower = steadier</span></div>
+        <span class="rk-note">field avg <b>${fieldAvg}</b> · tap a judge for full stats · tap a column to sort · vs field: + generous, − tough · σ: lower = steadier</span></div>
       <div class="rk-scroll"><table class="jdb-rank">
         <thead><tr><th class="rk-num">#</th><th class="rk-name">Judge</th>
           ${rankCols.map((col) => `<th data-k="${col.k}">${col.label}</th>`).join("")}
@@ -2107,8 +2138,8 @@ async function renderJudgesDB() {
           String(a.name).localeCompare(String(b.name))
       );
       rankBody.replaceChildren(
-        ...sorted.map((p, i) =>
-          el(`<tr>
+        ...sorted.map((p, i) => {
+          const tr = el(`<tr class="rk-click" title="Tap for ${esc(p.name)}'s full stats">
             <td class="rk-num">${i + 1}</td>
             <td class="rk-name">${esc(p.name)}</td>
             <td>${p.eventsJudged}</td>
@@ -2118,8 +2149,10 @@ async function renderJudgesDB() {
               p.dishesScored ? (p.generosity > 0 ? "+" : "") + p.generosity : "—"
             }</td>
             <td>${p.dishesScored ? p.consistency : "—"}</td>
-          </tr>`)
-        )
+          </tr>`);
+          tr.onclick = () => showJudge(p);
+          return tr;
+        })
       );
       rankWrap.querySelectorAll("th[data-k]").forEach((th) => {
         const on = th.dataset.k === sortK;
@@ -2137,35 +2170,7 @@ async function renderJudgesDB() {
     });
     drawRank();
 
-    // ---- Detailed profile cards ----
-    const list = el(`<div class="jdb-list"></div>`);
-    profiles.forEach((p) => {
-      const gTag =
-        p.generosity > 0.15 ? `<span class="tag gen">generous +${p.generosity}</span>`
-        : p.generosity < -0.15 ? `<span class="tag harsh">harsh ${p.generosity}</span>`
-        : `<span class="tag neu">balanced</span>`;
-      const cTag =
-        p.consistency <= 0.8 ? `<span class="tag steady">very consistent</span>`
-        : p.consistency >= 1.4 ? `<span class="tag swingy">high spread</span>`
-        : `<span class="tag neu">typical spread</span>`;
-      const crit = Object.keys(p.perCriterion)
-        .map((k) => `<span class="pcrit">${esc(k)} <b>${p.perCriterion[k]}</b></span>`)
-        .join("");
-      list.appendChild(
-        el(`<div class="jdb-card">
-          <div class="jdb-head"><h3>${esc(p.name)}</h3><span class="jdb-meta">${p.eventsJudged} event(s) · ${p.dishesScored} dishes</span></div>
-          <div class="jdb-stats">
-            <div><b>${p.avgScore}</b><span>avg score</span></div>
-            <div><b>${p.generosity > 0 ? "+" : ""}${p.generosity}</b><span>vs field</span></div>
-            <div><b>${p.consistency}</b><span>spread (σ)</span></div>
-          </div>
-          <div class="jdb-tags">${gTag}${cTag}</div>
-          <div class="jdb-crit">${crit}</div>
-        </div>`)
-      );
-    });
-
-    host.replaceChildren(rankWrap, el(`<h3 class="jdb-cardsh">Profiles</h3>`), list);
+    host.replaceChildren(rankWrap);
   }
 
   $("#jseries", c).onchange = (e) => { series = e.target.value; render(); };

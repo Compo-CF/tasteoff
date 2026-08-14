@@ -439,6 +439,9 @@ input, select {
 .jdb-rank thead th.on { color: var(--accent, #b5482e); }
 .jdb-rank thead th[data-k]::after { content: attr(data-arrow); font-size: 9px; margin-left: 2px; }
 .jdb-rank tbody tr { border-bottom: 1px solid var(--line); }
+.jdb-rank tbody tr.rk-click { cursor: pointer; }
+.jdb-rank tbody tr.rk-click:hover { background: var(--bg); }
+.jdb-rank tbody tr.rk-click .rk-name { color: var(--accent, #b5482e); font-weight: 600; }
 .jdb-rank tbody tr:nth-child(-n+3) .rk-num { font-weight: 800; color: var(--ink); }
 .jdb-rank td.rk-b { font-weight: 700; }
 .jdb-rank td.gen { color: #2e7d47; font-weight: 700; }
