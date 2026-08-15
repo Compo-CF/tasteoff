@@ -131,7 +131,7 @@ const ordinal = (n) => {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 };
 
-const DEFAULT_EVENT_ID = "houbbq-2026";
+const DEFAULT_EVENT_ID = "houbbq-2026-sep";
 const LS = {
   get judgeId() {
     return localStorage.getItem("tasteoff_judgeId");
@@ -1338,9 +1338,12 @@ async function renderJudge(params) {
   const ev = await loadEvent(eventId);
   if (isStale(myToken)) return;
   if (!ev) {
-    app().replaceChildren(
-      el(`<div class="wrap"><a class="back" href="#/menu">← home</a><p class="empty">No event found. Ask the organizer for the link.</p></div>`)
-    );
+    const w = el(`<div class="wrap"><a class="back" href="#/menu">← home</a>
+      <h2>Couldn't load the event</h2>
+      <p class="empty">This can happen on a slow connection. Check your signal and try again — if it keeps failing, ask the organizer for the link.</p>
+      <button class="primary" id="retry">Try again</button></div>`);
+    $("#retry", w).onclick = () => renderJudge(params);
+    app().replaceChildren(w);
     return;
   }
   // Judging must be explicitly opened by the organizer before judges can score.

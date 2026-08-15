@@ -143,9 +143,9 @@ function withTimeout(promise, ms, onTimeout) {
 export async function loadEvent(eventId) {
   if (isDemo(eventId)) return makeSampleEvent("demo");
   try {
-    await withTimeout(authReady, 4000, null);
+    await withTimeout(authReady, 9000, null);
     // Don't let a stalled network hang the UI — cap the read.
-    const snap = await withTimeout(getDoc(eventRef(eventId)), 4000, "__timeout__");
+    const snap = await withTimeout(getDoc(eventRef(eventId)), 9000, "__timeout__");
     if (snap === "__timeout__") {
       console.warn("loadEvent timed out (Firebase not reachable yet)");
       return null;
