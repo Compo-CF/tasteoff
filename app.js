@@ -2089,6 +2089,9 @@ async function renderJudgesDB() {
     const facets = Object.keys(p.perCriterion || {}).map((k) => ({ short: k, value: p.perCriterion[k] }));
     const bars = facets.length ? barChart(facets.map((f) => ({ label: f.short, value: f.value })), { max: 5 }) : `<p class="hint">No per-criterion data.</p>`;
     const rdr = facets.length >= 3 ? radar(facets, { max: 5 }) : "";
+    const track = (p.appearances || [])
+      .map((a) => `<tr><td>${esc(a.event)}</td><td class="sc">${a.dishes}</td><td class="sc">${a.avg}</td><td class="${a.generosity > 0.15 ? "gen" : a.generosity < -0.15 ? "harsh" : ""}">${a.generosity > 0 ? "+" : ""}${a.generosity}</td></tr>`)
+      .join("");
     const ov = el(`<div class="modal-ov"><div class="modal wide">
       <div class="dd-head"><h3>${esc(p.name)}</h3><button class="mini" id="jClose">close</button></div>
       <p class="sub">${p.eventsJudged} event(s) · ${p.dishesScored} dishes scored</p>
@@ -2098,6 +2101,8 @@ async function renderJudgesDB() {
         <div><b>${p.dishesScored ? p.consistency : "—"}</b><span>spread (σ)</span></div>
       </div>
       <div class="jdb-tags">${gTag}${cTag}</div>
+      <h4>Events judged</h4>
+      <table class="dd-judges"><thead><tr><th>Event</th><th>Ballots</th><th>Avg</th><th>vs field</th></tr></thead><tbody>${track}</tbody></table>
       <h4>By criterion</h4>
       <div class="dd-cols">${rdr ? `<div class="dd-radar">${rdr}</div>` : ""}<div class="dd-bars">${bars}</div></div>
     </div></div>`);

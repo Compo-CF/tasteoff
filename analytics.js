@@ -346,6 +346,7 @@ export function judgeProfiles(roster, events, scoresByEvent) {
       perCriterion: {}, // shortName -> values[]
       generosities: [], // per-event generosity
       consensusDeltas: [], // |judge dish total - dish avg total| per dish
+      appearances: [], // per-event participation record
     });
 
   for (const ev of events) {
@@ -375,6 +376,15 @@ export function judgeProfiles(roster, events, scoresByEvent) {
       const perDish = {};
       mine.forEach((f) => (perDish[f.teamCode] = (perDish[f.teamCode] || 0) + f.value));
       Object.keys(perDish).forEach((code) => p.dishes.add(ev.id + ":" + code));
+      // per-event participation record (for the judge-detail popup)
+      p.appearances.push({
+        eventId: ev.id,
+        event: ev.name || ev.id,
+        eventDate: ev.eventDate || "",
+        dishes: Object.keys(perDish).length,
+        avg: round2(mean(vals)),
+        generosity: round2(mean(vals) - fieldMean),
+      });
     }
   }
 
@@ -389,5 +399,8 @@ export function judgeProfiles(roster, events, scoresByEvent) {
     perCriterion: Object.fromEntries(
       Object.keys(p.perCriterion).map((k) => [k, round2(mean(p.perCriterion[k]))])
     ),
+    appearances: p.appearances
+      .slice()
+      .sort((a, b) => (b.eventDate || "").localeCompare(a.eventDate || "") || String(a.event).localeCompare(String(b.event))),
   })).sort((a, b) => b.eventsJudged - a.eventsJudged || b.dishesScored - a.dishesScored);
 }
