@@ -1348,11 +1348,13 @@ async function renderJudge(params) {
   }
   // Judging must be explicitly opened by the organizer before judges can score.
   if (eventId !== "demo" && ev.judgingOpen !== true) {
-    app().replaceChildren(
-      el(`<div class="wrap"><a class="back" href="#/menu">← home</a>
-        <h2>${esc(ev.name || "Judging")}</h2>
-        <p class="empty">⏳ Judging hasn't opened yet.<br>The organizer will start it when the event begins.</p></div>`)
-    );
+    const w = el(`<div class="wrap"><a class="back" href="#/menu">← home</a>
+      <h2>${esc(ev.name || "Judging")}</h2>
+      <p class="empty">⏳ Judging hasn't opened yet.<br>The organizer will start it when the event begins.</p>
+      <button class="primary" id="reload">Reload now</button>
+      <p class="sub" style="text-align:center">Tap once the organizer says it's open.</p></div>`);
+    $("#reload", w).onclick = () => renderJudge(params);
+    app().replaceChildren(w);
     return;
   }
   LS.setActiveEvent(eventId);
