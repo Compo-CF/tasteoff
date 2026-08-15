@@ -491,7 +491,9 @@ input, select {
 /* ---------- JUDGE CARD (printable: QR + rubric) ---------- */
 .judgecard { max-width: 720px; }
 .jc-card { border: 1px solid var(--line); border-radius: 14px; padding: 26px 28px; margin: 18px 0; background: var(--card); box-shadow: var(--shadow); break-inside: avoid; }
-.jc-top { display: flex; gap: 24px; align-items: center; margin: 18px 0 20px; flex-wrap: wrap; }
+.jc-name { font-size: 30px; margin: 16px 0 4px; letter-spacing: -.5px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.jc-name .jc-tablebadge { margin-bottom: 0; }
+.jc-top { display: flex; gap: 24px; align-items: center; margin: 14px 0 20px; flex-wrap: wrap; }
 .jc-qr { flex: none; width: 190px; height: 190px; }
 .jc-qr svg, .jc-qr canvas, .jc-qr img { width: 100% !important; height: 100% !important; }
 .jc-scan { flex: 1; min-width: 240px; }

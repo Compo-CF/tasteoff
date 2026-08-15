@@ -1354,6 +1354,11 @@ async function renderJudge(params) {
   }
   LS.setActiveEvent(eventId);
 
+  // A per-judge QR carries &judge=<id>; adopt it so scanning your own card
+  // opens your ballot directly (overrides any prior judge on a shared phone).
+  const judgeHint = params.get("judge");
+  if (judgeHint && ev.judges.some((j) => j.id === judgeHint)) LS.judgeId = judgeHint;
+
   // Identify the judge.
   let judge = ev.judges.find((j) => j.id === LS.judgeId);
   if (!judge) {
@@ -2311,44 +2316,48 @@ async function renderJudgeCard() {
   const crit = ev.criteria || [];
   const wtot = crit.reduce((a, c) => a + (+c.weight || 0), 0) || 1;
   const wpct = (c) => Math.round((+c.weight || 0) / wtot * 100);
-  const tables = usedTables(ev);
-  const judgesAt = (tbl) => (ev.judges || []).filter((j) => (j.table || "A") === tbl).length;
+  const judges = ev.judges || [];
+  const multiTable = usedTables(ev).length > 1;
+  const jUrl = (j) => `${base}#/judge?event=${encodeURIComponent(ev.id)}&table=${j.table || "A"}&judge=${encodeURIComponent(j.id)}`;
   const critRows = crit
     .map((c) => `<tr><td class="jc-crit">${esc(c.name)}</td><td class="jc-w">${wpct(c)}%</td><td class="jc-lo">${esc(c.low || "—")}</td><td class="jc-hi">${esc(c.high || "—")}</td></tr>`)
     .join("");
-  const cards = tables
-    .map((tbl) => {
-      const url = `${base}#/judge?event=${encodeURIComponent(ev.id)}&table=${tbl}`;
-      const jn = judgesAt(tbl);
+  const cards = judges
+    .map((j, i) => {
+      const tbl = j.table || "A";
       return `<section class="jc-card">
-        <div class="pi-head"><span class="pi-brand">🔥 ${esc(ev.name || "Competition")}</span><span class="pi-tag">Judge card${tables.length > 1 ? " · Table " + esc(tbl) : ""}</span></div>
+        <div class="pi-head"><span class="pi-brand">🔥 ${esc(ev.name || "Competition")}</span><span class="pi-tag">Judge card</span></div>
+        <h2 class="jc-name">${esc(j.name || "Judge")}${multiTable ? ` <span class="jc-tablebadge">Table ${esc(tbl)}</span>` : ""}</h2>
         <div class="jc-top">
-          <div class="jc-qr" id="jcqr${esc(tbl)}"></div>
+          <div class="jc-qr" id="jcqr${i}"></div>
           <div class="jc-scan">
-            ${tables.length > 1 ? `<div class="jc-tablebadge">Table ${esc(tbl)}</div>` : ""}
-            <h2 class="jc-h">Scan to start judging</h2>
+            <h3 class="jc-h">Scan to start judging</h3>
             <ol class="jc-steps">
-              <li>Point your phone camera at the code.</li>
-              <li>Enter your name to join${tables.length > 1 ? " Table " + esc(tbl) : ""}.</li>
+              <li>Point your phone camera at the code — it opens your ballot as <b>${esc(j.name || "you")}</b>${multiTable ? ` at Table ${esc(tbl)}` : ""}.</li>
               <li>Tap the <b>code</b> on each dish as it arrives and score every criterion <b>1–5</b>. Scores save automatically.</li>
             </ol>
-            <p class="jc-url">${esc(url)}</p>
+            <p class="jc-url">${esc(jUrl(j))}</p>
           </div>
         </div>
         <h3 class="jc-gh">Scoring rubric — ${crit.length} criteria, 1 (low) → 5 (high)</h3>
         <table class="jc-table"><thead><tr><th>Criterion</th><th>Weight</th><th>A “1” means…</th><th>A “5” means…</th></tr></thead><tbody>${critRows}</tbody></table>
-        <p class="jc-note"><b>Judge blind.</b> Dishes are anonymous, identified only by a code — score exactly what's on the plate. Weights are applied automatically; you just rate each criterion 1–5.${jn ? ` You're one of <b>${jn}</b> judge${jn === 1 ? "" : "s"} at this table.` : ""}</p>
+        <p class="jc-note"><b>Judge blind.</b> Dishes are anonymous, identified only by a code — score exactly what's on the plate. Weights are applied automatically; you just rate each criterion 1–5.</p>
       </section>`;
     })
     .join("");
+  const empty = !judges.length
+    ? (crit.length
+        ? `<p class="empty">No judges yet — add judges in Set up event and each gets their own card.</p>`
+        : `<p class="empty">Add judges and criteria in Set up event first — each judge gets a card with the rubric.</p>`)
+    : "";
   const c = el(`<div class="wrap judgecard">
-    <div class="jbar noprint"><a class="back" href="#/menu">←</a><div class="who">${esc(ev.name || "Judge card")}</div>
+    <div class="jbar noprint"><a class="back" href="#/menu">←</a><div class="who">${esc(ev.name || "Judge cards")}</div>
       <button class="mini" id="print">Print all</button></div>
-    <p class="sub noprint">One card per judging table — print and place on each table. Judges scan to join and score; the criteria &amp; rubric are printed right on the card.</p>
-    ${crit.length ? cards : `<p class="empty">Add criteria in Set up event first — the rubric comes from them.</p>`}
+    <p class="sub noprint">One card per judge — print and hand each judge theirs. Scanning the code opens their ballot already set to their name${multiTable ? " and table" : ""}; the scoring rubric is printed on the card.</p>
+    ${judges.length ? cards : empty}
   </div>`);
   app().replaceChildren(c);
-  tables.forEach((tbl) => makeQR($("#jcqr" + tbl, c), `${base}#/judge?event=${encodeURIComponent(ev.id)}&table=${tbl}`));
+  judges.forEach((j, i) => makeQR($("#jcqr" + i, c), jUrl(j)));
   $("#print", c).onclick = () => window.print();
 }
 
