@@ -197,6 +197,7 @@ async function render() {
   if (path === "/participants") return renderHistory("restaurants");
   if (path === "/runner") return renderRunner();
   if (path === "/instructions") return renderInstructions();
+  if (path === "/judgecard") return renderJudgeCard();
   if (path === "/checklist") return requireCode("admin", renderChecklist);
   if (path === "/events") return requireCode("admin", renderEvents);
   if (path === "/sample") return renderSample();
@@ -1267,10 +1268,17 @@ async function renderAdmin(preloaded) {
   app().replaceChildren(c);
 }
 
+// Tables actually in use (from team/judge assignments). Defaults to just "A"
+// so single-table events don't print an empty Table B.
+function usedTables(ev) {
+  const s = [...new Set([...(ev.teams || []).map((t) => t.table), ...(ev.judges || []).map((j) => j.table)].filter(Boolean))].sort();
+  return s.length ? s : ["A"];
+}
+
 function showLinks(ev, box) {
   const base = location.origin + location.pathname;
   box.replaceChildren();
-  ["A", "B"].forEach((tbl) => {
+  usedTables(ev).forEach((tbl) => {
     const url = `${base}#/judge?event=${encodeURIComponent(ev.id)}&table=${tbl}`;
     const card = el(`<div class="linkcard"><h4>Table ${tbl}</h4>
       <div class="qr" id="qr${tbl}"></div>
@@ -1296,6 +1304,12 @@ function showLinks(ev, box) {
     el(`<div class="linkcard"><h4>Participant instructions</h4><input readonly value="${esc(
       insturl
     )}" onclick="this.select()"><a class="mini" href="#/instructions?event=${encodeURIComponent(ev.id)}">Open &amp; print →</a></div>`)
+  );
+  const jcurl = `${base}#/judgecard?event=${encodeURIComponent(ev.id)}`;
+  box.appendChild(
+    el(`<div class="linkcard"><h4>Judge cards (QR + rubric)</h4><input readonly value="${esc(
+      jcurl
+    )}" onclick="this.select()"><a class="mini" href="#/judgecard?event=${encodeURIComponent(ev.id)}">Open &amp; print →</a></div>`)
   );
 }
 
@@ -2281,6 +2295,61 @@ async function renderInstructions() {
   </div>`);
   $("#print", c).onclick = () => window.print();
   app().replaceChildren(c);
+}
+
+// ---------- JUDGE CARD (printable: join QR + scoring rubric, one per table) ----------
+async function renderJudgeCard() {
+  const myToken = renderToken;
+  const eventId = LS.activeEvent();
+  const ev = await loadEvent(eventId);
+  if (isStale(myToken)) return;
+  if (!ev) {
+    app().replaceChildren(el(`<div class="wrap"><a class="back" href="#/menu">← home</a><p class="empty">No event found.</p></div>`));
+    return;
+  }
+  const base = location.origin + location.pathname;
+  const crit = ev.criteria || [];
+  const wtot = crit.reduce((a, c) => a + (+c.weight || 0), 0) || 1;
+  const wpct = (c) => Math.round((+c.weight || 0) / wtot * 100);
+  const tables = usedTables(ev);
+  const judgesAt = (tbl) => (ev.judges || []).filter((j) => (j.table || "A") === tbl).length;
+  const critRows = crit
+    .map((c) => `<tr><td class="jc-crit">${esc(c.name)}</td><td class="jc-w">${wpct(c)}%</td><td class="jc-lo">${esc(c.low || "—")}</td><td class="jc-hi">${esc(c.high || "—")}</td></tr>`)
+    .join("");
+  const cards = tables
+    .map((tbl) => {
+      const url = `${base}#/judge?event=${encodeURIComponent(ev.id)}&table=${tbl}`;
+      const jn = judgesAt(tbl);
+      return `<section class="jc-card">
+        <div class="pi-head"><span class="pi-brand">🔥 ${esc(ev.name || "Competition")}</span><span class="pi-tag">Judge card${tables.length > 1 ? " · Table " + esc(tbl) : ""}</span></div>
+        <div class="jc-top">
+          <div class="jc-qr" id="jcqr${esc(tbl)}"></div>
+          <div class="jc-scan">
+            ${tables.length > 1 ? `<div class="jc-tablebadge">Table ${esc(tbl)}</div>` : ""}
+            <h2 class="jc-h">Scan to start judging</h2>
+            <ol class="jc-steps">
+              <li>Point your phone camera at the code.</li>
+              <li>Enter your name to join${tables.length > 1 ? " Table " + esc(tbl) : ""}.</li>
+              <li>Tap the <b>code</b> on each dish as it arrives and score every criterion <b>1–5</b>. Scores save automatically.</li>
+            </ol>
+            <p class="jc-url">${esc(url)}</p>
+          </div>
+        </div>
+        <h3 class="jc-gh">Scoring rubric — ${crit.length} criteria, 1 (low) → 5 (high)</h3>
+        <table class="jc-table"><thead><tr><th>Criterion</th><th>Weight</th><th>A “1” means…</th><th>A “5” means…</th></tr></thead><tbody>${critRows}</tbody></table>
+        <p class="jc-note"><b>Judge blind.</b> Dishes are anonymous, identified only by a code — score exactly what's on the plate. Weights are applied automatically; you just rate each criterion 1–5.${jn ? ` You're one of <b>${jn}</b> judge${jn === 1 ? "" : "s"} at this table.` : ""}</p>
+      </section>`;
+    })
+    .join("");
+  const c = el(`<div class="wrap judgecard">
+    <div class="jbar noprint"><a class="back" href="#/menu">←</a><div class="who">${esc(ev.name || "Judge card")}</div>
+      <button class="mini" id="print">Print all</button></div>
+    <p class="sub noprint">One card per judging table — print and place on each table. Judges scan to join and score; the criteria &amp; rubric are printed right on the card.</p>
+    ${crit.length ? cards : `<p class="empty">Add criteria in Set up event first — the rubric comes from them.</p>`}
+  </div>`);
+  app().replaceChildren(c);
+  tables.forEach((tbl) => makeQR($("#jcqr" + tbl, c), `${base}#/judge?event=${encodeURIComponent(ev.id)}&table=${tbl}`));
+  $("#print", c).onclick = () => window.print();
 }
 
 // ---------- HISTORICAL ANALYSIS ----------
