@@ -1287,9 +1287,9 @@ function showLinks(ev, box) {
   );
   const runurl = `${base}#/runner?event=${encodeURIComponent(ev.id)}`;
   box.appendChild(
-    el(`<div class="linkcard"><h4>Runner sheet (confidential)</h4><input readonly value="${esc(
+    el(`<div class="linkcard"><h4>Runner sheet / pickup schedule</h4><input readonly value="${esc(
       runurl
-    )}" onclick="this.select()"></div>`)
+    )}" onclick="this.select()"><a class="mini" href="#/runner?event=${encodeURIComponent(ev.id)}">Open &amp; print →</a></div>`)
   );
   const insturl = `${base}#/instructions?event=${encodeURIComponent(ev.id)}`;
   box.appendChild(
@@ -2201,12 +2201,14 @@ async function renderRunner() {
   const teams = [...(ev.teams || [])].sort(
     (a, b) => (a.dishNumber || 0) - (b.dishNumber || 0) || String(a.serveTime).localeCompare(String(b.serveTime))
   );
+  const anyTable = teams.some((t) => t.table);
   const rows = teams
     .map(
       (t) => `<tr>
         <td class="rt">${esc(fmt12(t.serveTime))}</td>
         <td class="tb">${t.dishNumber ?? ""}</td>
-        <td>${esc(t.name || "")}</td>
+        <td class="rteam">${esc(t.name || "")}</td>
+        ${anyTable ? `<td class="tb rtable">${esc(t.table || "—")}</td>` : ""}
         ${t.dishDescription ? `<td class="rd">${esc(t.dishDescription)}</td>` : "<td></td>"}
       </tr>`
     )
@@ -2215,8 +2217,9 @@ async function renderRunner() {
     <div class="jbar noprint"><a class="back" href="#/menu">←</a><div class="who">${esc(ev.name || "Runner sheet")}</div>
       <button class="mini" id="print">Print</button></div>
     <h2 class="runner-h">Runner sheet — pickup schedule</h2>
-    <p class="sub noprint">Pickup order for runners — team names &amp; times only (no blind codes). Safe to hand out.</p>
-    <table class="runner-table"><thead><tr><th>Pickup</th><th>Dish #</th><th>Team</th><th>Dish</th></tr></thead>
+    <p class="runner-when">${esc(ev.name || "")}${ev.eventDate ? " · " + esc(fmtDay(ev.eventDate)) : ""} · pick up each dish at its time and deliver it to the judging table under a blind code.</p>
+    <p class="sub noprint">Team names &amp; times only (no blind codes) — safe to hand to runners.</p>
+    <table class="runner-table"><thead><tr><th>Pickup time</th><th>Dish #</th><th>Pick up from</th>${anyTable ? "<th>Deliver to</th>" : ""}<th>Dish</th></tr></thead>
       <tbody>${rows}</tbody></table>
   </div>`);
   $("#print", c).onclick = () => window.print();
@@ -2250,9 +2253,13 @@ async function renderInstructions() {
       return `<section class="pi-card">
         <div class="pi-head"><span class="pi-brand">🔥 ${esc(ev.name || "Competition")}</span><span class="pi-tag">Participant instructions</span></div>
         <h2 class="pi-name">${esc(t.name || "Participant")}</h2>
-        <div class="pi-meta">
-          <div><span class="pi-lbl">Your dish</span><span class="pi-val">${esc(t.dishDescription || "—")}</span></div>
-          <div><span class="pi-lbl">${timeLbl}</span><span class="pi-val">${esc(fmt12(t.serveTime))}</span></div>
+        <div class="pi-dishrow"><span class="pi-lbl">Your dish</span><span class="pi-val">${esc(t.dishDescription || "—")}</span></div>
+        <div class="pi-time">
+          <div class="pi-time-l">
+            <span class="pi-time-lbl">${dropoff ? "⏱ Deliver by" : "⏱ Pickup time"}</span>
+            <span class="pi-time-sub">${dropoff ? "have your dish at the judging area by" : "have all portions plated &amp; ready — a runner collects at"}</span>
+          </div>
+          <span class="pi-time-val">${esc(fmt12(t.serveTime))}</span>
         </div>
         <div class="pi-rules">
           <div class="pi-rule"><span class="pi-num">1</span><p>${portionLine}</p></div>
