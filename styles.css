@@ -562,7 +562,7 @@ input, select {
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ---------- NEW-EVENT WIZARD ---------- */
-.wizard { max-width: 640px; }
+.wizard { max-width: 640px; text-align: left; }
 .wz-steps { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0 16px; }
 .wz-step { font-size: 12px; font-weight: 700; color: var(--muted); }
 .wz-step.on { color: var(--brand); }
@@ -583,7 +583,8 @@ input, select {
 .wz-crlist { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px 30px; }
 .wz-crlist .pcrit { font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; }
 .wz-check { flex-direction: row !important; align-items: center; gap: 8px !important; color: var(--ink) !important; font-size: 15px !important; }
-.wz-check input { flex: none; }
+.wz-check input { flex: none; width: auto; margin: 0; }
+.wz-check span { flex: 1; }
 .wz-review .wz-rev { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .wz-review .wz-rev span { color: var(--muted); }
 .wz-review .wz-rev b { text-align: right; }

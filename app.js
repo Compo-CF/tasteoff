@@ -759,7 +759,7 @@ async function renderWizard() {
       <div class="wz-card">
         <h3>Awards</h3>
         <label>Judges' Choice — winners to name (top N) <input id="wz_jtop" type="number" min="1" value="${W.judgesTopN}"></label>
-        <label class="wz-check"><input type="checkbox" id="wz_pc"${W.pcEnabled ? " checked" : ""}> Enable People's Choice (crowd vote)</label>
+        <label class="wz-check"><input type="checkbox" id="wz_pc"${W.pcEnabled ? " checked" : ""}> <span>Enable People's Choice (crowd vote)</span></label>
         <div class="row">
           <label>Vote unit <input id="wz_pcunit" value="${esc(W.pcUnit)}" placeholder="Coins / Beans / Votes"></label>
           <label>People's Choice top N <input id="wz_pctop" type="number" min="1" value="${W.pcTopN}"></label>
