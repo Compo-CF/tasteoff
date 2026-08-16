@@ -131,6 +131,14 @@ const ordinal = (n) => {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 };
 
+// Shared sub-navigation tabs for the Event Admin and Analytics hubs.
+function hubTabs(kind, active) {
+  const tabs = kind === "admin"
+    ? [["events", "My events", "#/events"], ["admin", "Set up event", "#/admin"], ["checklist", "Checklist", "#/checklist"]]
+    : [["judges", "Judge Analytics", "#/judges"], ["events", "Event Analytics", "#/history"], ["participants", "Participant Analytics", "#/participants"]];
+  return el(`<div class="hubtabs">${tabs.map(([k, l, h]) => `<a class="hubtab${k === active ? " on" : ""}" href="${h}">${esc(l)}</a>`).join("")}</div>`);
+}
+
 const DEFAULT_EVENT_ID = "houbbq-2026-sep";
 const LS = {
   get judgeId() {
@@ -293,29 +301,13 @@ function renderHome() {
           <div class="ci">🏆</div><h3>Results</h3>
           <p>Live leaderboard (organizer).</p>
         </a>
-        <a class="card admin" href="#/admin">
-          <div class="ci">⚙️</div><h3>Set up event</h3>
-          <p>Criteria, judges, teams, codes.</p>
-        </a>
-        <a class="card events" href="#/events">
-          <div class="ci">🗂️</div><h3>My events</h3>
-          <p>Drafts &amp; upcoming — pick one to work on.</p>
-        </a>
-        <a class="card checklist" href="#/checklist">
-          <div class="ci">✅</div><h3>Event checklist</h3>
-          <p>Everything you need to run judging.</p>
+        <a class="card admin" href="#/events">
+          <div class="ci">⚙️</div><h3>Event Admin</h3>
+          <p>Set up, manage &amp; check your events.</p>
         </a>
         <a class="card judgesdb" href="#/judges">
-          <div class="ci">📊</div><h3>Judge database</h3>
-          <p>How your judges behave over time.</p>
-        </a>
-        <a class="card history" href="#/history">
-          <div class="ci">📈</div><h3>Event history</h3>
-          <p>Past events, winners &amp; why they won.</p>
-        </a>
-        <a class="card participants" href="#/participants">
-          <div class="ci">👥</div><h3>Participant history</h3>
-          <p>Restaurant track records &amp; rankings.</p>
+          <div class="ci">📊</div><h3>Analytics</h3>
+          <p>Judges, events &amp; participants over time.</p>
         </a>
       </div>
       <p class="foot">Add to Home Screen to use it like an app.</p>
@@ -478,6 +470,7 @@ function buildChecklistView(ev, eventId) {
     <p class="foot">Tip: import a spreadsheet in Set up event to fill teams, judges &amp; criteria at once.</p>
   </div>`);
 
+  c.querySelector(".back").after(hubTabs("admin", "checklist"));
   const box = $(".ckitems", c);
   const icon = { ok: "✓", warn: "!", todo: "○" };
   items.forEach((it) => {
@@ -518,6 +511,7 @@ function buildEventsView(list) {
     <div class="evgroups"></div>
   </div>`);
 
+  c.querySelector(".back").after(hubTabs("admin", "events"));
   $("#evNew", c).onclick = () => { location.hash = "#/new"; };
 
   const groups = $(".evgroups", c);
@@ -911,6 +905,7 @@ async function renderAdmin(preloaded) {
 
   const c = el(`<div class="wrap admin"></div>`);
   c.appendChild(el(`<a class="back" href="#/menu">← home</a>`));
+  c.appendChild(hubTabs("admin", "admin"));
   c.appendChild(el(`<h2>Event setup</h2>`));
 
   // Load the master roster so imported/typed judges link to existing judges.
@@ -2324,8 +2319,9 @@ async function renderJudgesDB() {
   const allProfiles = judgeProfiles(rosterMap, events, scoresByEvent);
 
   const c = el(`<div class="wrap judgesdb"><a class="back" href="#/menu">← home</a>
-    <h2>Judge database</h2>
+    <h2>Judge Analytics</h2>
     <p class="sub" id="jsub"></p></div>`);
+  c.querySelector(".back").after(hubTabs("analytics", "judges"));
 
   if (!allProfiles.length) {
     $("#jsub", c).textContent = "No judging data yet.";
@@ -2338,6 +2334,68 @@ async function renderJudgesDB() {
   // judged Truffle Masters"). Series = the event name with its year stripped.
   const seriesOf = (e) => String(e.name || "").replace(/\s*\b(19|20)\d{2}\b.*$/, "").trim() || String(e.name || e.id);
   const seriesList = [...new Set(events.filter((e) => (scoresByEvent[e.id] || []).length).map(seriesOf))].sort();
+
+  // ---- Dream Team builder ----
+  const suggestedSize = (evs) => {
+    const counts = evs.filter((e) => (scoresByEvent[e.id] || []).length).map((e) => (e.judges || []).length).filter(Boolean);
+    if (!counts.length) return 5;
+    counts.sort((a, b) => a - b);
+    return counts[Math.floor(counts.length / 2)];
+  };
+  const dtCard = el(`<div class="dreamteam">
+    <h3>🌟 Construct a Dream Team of Judges</h3>
+    <p class="hint">Pick an event type — tasteoff drafts a balanced panel from everyone who's judged it, weighing experience, calibration (scoring near the field) and consistency. Tap a name for their full profile.</p>
+    <div class="dt-controls">
+      <label>Event type <select id="dtSeries">
+        <option value="__all__">Any / all events</option>
+        ${seriesList.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join("")}
+      </select></label>
+      <label>Panel size <input id="dtSize" type="number" min="1" value="5"></label>
+      <button class="primary" id="dtBuild">Build panel</button>
+    </div>
+    <div id="dtResult"></div>
+  </div>`);
+  const syncDtSize = () => {
+    const v = $("#dtSeries", dtCard).value;
+    const evs = v === "__all__" ? events : events.filter((e) => seriesOf(e) === v);
+    $("#dtSize", dtCard).value = suggestedSize(evs);
+  };
+  function buildDream() {
+    const series = $("#dtSeries", dtCard).value;
+    const evs = series === "__all__" ? events : events.filter((e) => seriesOf(e) === series);
+    const profs = judgeProfiles(rosterMap, evs, scoresByEvent).filter((p) => p.dishesScored > 0);
+    const size = Math.max(1, parseInt($("#dtSize", dtCard).value) || 5);
+    const out = $("#dtResult", dtCard);
+    if (!profs.length) { out.innerHTML = `<p class="empty">No one has judged ${series === "__all__" ? "any events" : esc(series)} yet.</p>`; return; }
+    const maxDish = Math.max(...profs.map((p) => p.dishesScored));
+    const maxEv = Math.max(...profs.map((p) => p.eventsJudged));
+    const scored = profs.map((p) => {
+      const exp = 0.6 * (p.dishesScored / maxDish) + 0.4 * (p.eventsJudged / maxEv);
+      const cal = 1 - Math.min(1, Math.abs(p.generosity) / 0.6);
+      const con = 1 - Math.min(1, Math.abs((p.consistency || 0) - 0.8) / 0.8);
+      return { p, fit: 0.45 * exp + 0.35 * cal + 0.20 * con };
+    }).sort((a, b) => b.fit - a.fit);
+    const pick = scored.slice(0, size).map((x) => x.p);
+    const avgGen = Math.round((pick.reduce((a, p) => a + p.generosity, 0) / pick.length) * 100) / 100;
+    out.innerHTML = `<div class="dt-head">Recommended panel of <b>${pick.length}</b>${series !== "__all__" ? ` for ${esc(series)}` : ""} · balance: avg ${avgGen >= 0 ? "+" : ""}${avgGen} vs field <small>(0 = perfectly fair)</small></div>`;
+    const ol = el(`<ol class="dt-list"></ol>`);
+    pick.forEach((p) => {
+      const tags = [];
+      if (p.eventsJudged >= 3 || p.dishesScored >= 40) tags.push(`<span class="tag steady">experienced</span>`);
+      if (Math.abs(p.generosity) <= 0.15) tags.push(`<span class="tag neu">well-calibrated</span>`);
+      else if (p.generosity > 0.15) tags.push(`<span class="tag gen">runs generous</span>`);
+      else tags.push(`<span class="tag harsh">runs tough</span>`);
+      if (p.consistency >= 0.5 && p.consistency <= 1.1) tags.push(`<span class="tag steady">consistent</span>`);
+      const li = el(`<li class="dt-item" title="Tap for ${esc(p.name)}'s profile"><div class="dt-l"><span class="dt-name">${esc(p.name)}</span><span class="dt-tags">${tags.join("")}</span></div><div class="dt-stats">${p.eventsJudged} ev · ${p.dishesScored} ballots · avg ${p.avgScore} · ${p.generosity > 0 ? "+" : ""}${p.generosity} vs field · σ ${p.consistency}</div></li>`);
+      li.onclick = () => showJudge(p);
+      ol.appendChild(li);
+    });
+    out.appendChild(ol);
+  }
+  $("#dtSeries", dtCard).onchange = syncDtSize;
+  $("#dtBuild", dtCard).onclick = buildDream;
+  syncDtSize();
+  c.appendChild(dtCard);
 
   const controls = el(`<div class="rcontrols">
     <label class="serieslbl">Event type
@@ -2657,10 +2715,9 @@ async function renderHistory(mode) {
   const isParts = tab === "restaurants";
   const c = el(`<div class="wrap history">
     <a class="back" href="#/menu">← home</a>
-    <h2>${isParts ? "Participant history" : "Event history"}</h2>
+    <h2>${isParts ? "Participant Analytics" : "Event Analytics"}</h2>
     <p class="sub" id="hsub"></p>
     <div class="rcontrols">
-      <a class="switchlink" href="#/${isParts ? "history" : "participants"}">${isParts ? "🏆 Event history" : "👥 Participant history"} →</a>
       <label class="serieslbl">Event type
         <select id="seriesSel">
           <option value="__all__">All event types</option>
@@ -2670,6 +2727,7 @@ async function renderHistory(mode) {
     </div>
     <div id="hhost"></div>
   </div>`);
+  c.querySelector(".back").after(hubTabs("analytics", isParts ? "participants" : "events"));
   const host = $("#hhost", c);
   $("#seriesSel", c).onchange = (e) => {
     series = e.target.value;

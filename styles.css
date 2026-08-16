@@ -589,3 +589,28 @@ input, select {
 .wz-review .wz-rev span { color: var(--muted); }
 .wz-review .wz-rev b { text-align: right; }
 .wz-nav { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 18px 0 8px; }
+
+/* ---------- HUB TABS (Event Admin / Analytics sub-nav) ---------- */
+.hubtabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 14px; }
+.hubtab { text-decoration: none; font-size: 13px; font-weight: 700; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 8px 15px; white-space: nowrap; }
+.hubtab.on { background: var(--brand); color: #fff; border-color: var(--brand); }
+.hubtab:active { transform: scale(0.97); }
+
+/* ---------- DREAM TEAM builder ---------- */
+.dreamteam { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; box-shadow: var(--shadow); margin-bottom: 16px; border-left: 5px solid var(--brand-2); }
+.dreamteam h3 { margin: 0 0 4px; font-size: 17px; }
+.dt-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin: 12px 0 4px; }
+.dt-controls label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.dt-controls select, .dt-controls input { font-size: 15px; }
+.dt-controls input#dtSize { width: 80px; }
+.dt-controls .primary { padding: 10px 18px; }
+.dt-head { font-size: 13.5px; color: var(--muted); margin: 14px 0 8px; }
+.dt-head b { color: var(--ink); }
+.dt-list { list-style: none; margin: 0; padding: 0; counter-reset: dt; }
+.dt-item { display: flex; flex-direction: column; gap: 3px; padding: 10px 8px 10px 34px; border-bottom: 1px solid var(--line); position: relative; cursor: pointer; border-radius: 8px; }
+.dt-item:hover { background: var(--bg); }
+.dt-item::before { counter-increment: dt; content: counter(dt); position: absolute; left: 8px; top: 10px; width: 20px; height: 20px; border-radius: 50%; background: var(--brand); color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.dt-l { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dt-name { font-weight: 700; }
+.dt-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+.dt-stats { font-size: 12px; color: var(--muted); }
