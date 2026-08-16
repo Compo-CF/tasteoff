@@ -200,6 +200,7 @@ async function render() {
   if (path === "/judgecard") return renderJudgeCard();
   if (path === "/checklist") return requireCode("admin", renderChecklist);
   if (path === "/events") return requireCode("admin", renderEvents);
+  if (path === "/new") return requireCode("admin", renderWizard);
   if (path === "/sample") return renderSample();
   if (path === "/menu") return renderHome();
   return renderLanding();
@@ -517,11 +518,7 @@ function buildEventsView(list) {
     <div class="evgroups"></div>
   </div>`);
 
-  $("#evNew", c).onclick = () => {
-    const id = "event-" + uid().slice(0, 5);
-    LS.setActiveEvent(id);
-    location.hash = "#/admin";
-  };
+  $("#evNew", c).onclick = () => { location.hash = "#/new"; };
 
   const groups = $(".evgroups", c);
   const order = [
@@ -576,6 +573,274 @@ function buildEventsView(list) {
     groups.appendChild(sec);
   });
   return c;
+}
+
+// ---------- NEW-EVENT WIZARD ----------
+async function renderWizard() {
+  const myToken = renderToken;
+  app().replaceChildren(
+    el(`<div class="wrap"><a class="back" href="#/events">← my events</a><h2>New event</h2><p class="sub">Loading…</p></div>`)
+  );
+  const [events, saved] = await Promise.all([listEvents(), listTemplates().catch(() => [])]);
+  if (isStale(myToken)) return;
+  const templates = [...BUILTIN_TEMPLATES.map((t) => ({ ...t })), ...(saved || [])];
+  const pastEvents = events.slice();
+  const existingIds = new Set(pastEvents.map((e) => e.id));
+  const slug = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+
+  const W = {
+    name: "", date: "", venue: "",
+    start: "scratch", cloneId: "",
+    critMode: "template", templateId: templates[0] ? templates[0].id : "generic-tasting",
+    judges: 5, restaurants: 14, tables: 1,
+    startTime: "13:00", interval: 5, delivery: "runner", method: "scaled",
+    judgesTopN: 3, pcEnabled: false, pcUnit: "Coins", pcTopN: 3,
+  };
+  let cloneEv = null;
+  let step = 0;
+  const STEPS = ["Basics", "Criteria", "Scale & schedule", "Awards & review"];
+
+  const host = el(`<div class="wrap wizard"><a class="back" href="#/events">← my events</a>
+    <h2>New event</h2>
+    <div class="wz-steps"></div>
+    <div class="wz-body"></div>
+    <div class="wz-nav"></div></div>`);
+  app().replaceChildren(host);
+  const body = $(".wz-body", host);
+
+  const scaffoldTeams = (n, tables, startTime, interval) => {
+    const out = []; const tbls = tables === 2 ? ["A", "B"] : ["A"];
+    const per = tables === 2 ? [Math.ceil(n / 2), Math.floor(n / 2)] : [n];
+    tbls.forEach((tbl, ti) => {
+      for (let i = 0; i < per[ti]; i++) out.push({ code: `${tbl}${String(i + 1).padStart(2, "0")}`, name: "", table: tbl, dishNumber: i + 1, serveTime: addMinutes(startTime, i * interval), dishDescription: "", contactName: "", contactEmail: "" });
+    });
+    return out;
+  };
+  const scaffoldJudges = (n, tables, cloneJudges) => {
+    const out = []; const tbls = tables === 2 ? ["A", "B"] : ["A"];
+    const per = tables === 2 ? [Math.ceil(n / 2), Math.floor(n / 2)] : [n];
+    let k = 0;
+    tbls.forEach((tbl, ti) => {
+      for (let i = 0; i < per[ti]; i++) {
+        const nm = cloneJudges && cloneJudges[k] ? cloneJudges[k].name : "";
+        out.push({ id: nm ? judgeKey(nm) : uid("j"), name: nm, table: tbl });
+        k++;
+      }
+    });
+    return out;
+  };
+
+  function readStep() {
+    if (step === 0) {
+      W.name = $("#wz_name", body).value.trim();
+      W.date = $("#wz_date", body).value;
+      W.venue = $("#wz_venue", body).value.trim();
+      W.start = body.querySelector("input[name=wzstart]:checked").value;
+      W.cloneId = $("#wz_clone", body).value;
+    } else if (step === 1) {
+      W.critMode = body.querySelector("input[name=wzcrit]:checked").value;
+      W.templateId = $("#wz_tpl", body).value;
+    } else if (step === 2) {
+      W.judges = Math.max(1, parseInt($("#wz_judges", body).value) || W.judges);
+      W.restaurants = Math.max(1, parseInt($("#wz_rest", body).value) || W.restaurants);
+      W.tables = parseInt(body.querySelector("input[name=wztables]:checked").value) || 1;
+      W.startTime = $("#wz_start", body).value || W.startTime;
+      W.interval = Math.max(1, parseInt($("#wz_int", body).value) || W.interval);
+      W.delivery = body.querySelector("input[name=wzdeliv]:checked").value;
+      W.method = body.querySelector("input[name=wzmethod]:checked").value;
+    } else if (step === 3) {
+      W.judgesTopN = Math.max(1, parseInt($("#wz_jtop", body).value) || W.judgesTopN);
+      W.pcEnabled = $("#wz_pc", body).checked;
+      W.pcUnit = $("#wz_pcunit", body).value.trim() || "Coins";
+      W.pcTopN = Math.max(1, parseInt($("#wz_pctop", body).value) || W.pcTopN);
+    }
+  }
+
+  async function maybeLoadClone() {
+    if (W.start === "clone" && W.cloneId) {
+      if (!cloneEv || cloneEv.id !== W.cloneId) cloneEv = await loadEvent(W.cloneId);
+      if (cloneEv) {
+        W.judges = (cloneEv.judges || []).length || W.judges;
+        W.restaurants = (cloneEv.teams || []).length || W.restaurants;
+        W.tables = usedTables(cloneEv).length;
+        W.startTime = (cloneEv.schedule && cloneEv.schedule.startTime) || W.startTime;
+        W.interval = (cloneEv.schedule && cloneEv.schedule.intervalMin) || W.interval;
+        W.delivery = cloneEv.deliveryMode || W.delivery;
+        W.method = cloneEv.officialMethod || W.method;
+        const aw = eventAwards(cloneEv);
+        W.judgesTopN = aw.judgesTopN; W.pcEnabled = aw.peoples.enabled; W.pcUnit = aw.peoples.unit; W.pcTopN = aw.peoples.topN;
+        W.critMode = "clone";
+      }
+    } else {
+      cloneEv = null;
+      if (W.critMode === "clone") W.critMode = "template";
+    }
+  }
+
+  function drawSteps() {
+    $(".wz-steps", host).innerHTML = STEPS.map((s, i) => `<span class="wz-step${i === step ? " on" : ""}${i < step ? " done" : ""}">${i + 1}. ${esc(s)}</span>`).join("");
+  }
+
+  function bodyBasics() {
+    body.innerHTML = `
+      <div class="wz-card">
+        <label>Event name <input id="wz_name" value="${esc(W.name)}" placeholder="e.g. HouBBQ Throwdown 2026"></label>
+        <div class="row">
+          <label>Date <input id="wz_date" type="date" value="${esc(W.date)}"></label>
+          <label>Venue <input id="wz_venue" value="${esc(W.venue)}" placeholder="optional"></label>
+        </div>
+      </div>
+      <div class="wz-card">
+        <h3>Start from…</h3>
+        <label class="wz-opt"><input type="radio" name="wzstart" value="scratch"${W.start !== "clone" ? " checked" : ""}><span><b>A blank event</b><small>Choose criteria and set the numbers yourself.</small></span></label>
+        <label class="wz-opt"><input type="radio" name="wzstart" value="clone"${W.start === "clone" ? " checked" : ""}${pastEvents.length ? "" : " disabled"}><span><b>Copy an existing event</b><small>Reuse its criteria, judges, schedule &amp; awards as a starting point.</small></span></label>
+        <label class="wz-sub">Which event? <select id="wz_clone"${W.start === "clone" ? "" : " disabled"}>
+          <option value="">Choose…</option>
+          ${pastEvents.map((e) => `<option value="${esc(e.id)}"${W.cloneId === e.id ? " selected" : ""}>${esc(e.name)}</option>`).join("")}
+        </select></label>
+      </div>`;
+    body.querySelectorAll("input[name=wzstart]").forEach((r) => (r.onchange = () => {
+      $("#wz_clone", body).disabled = body.querySelector("input[name=wzstart]:checked").value !== "clone";
+    }));
+  }
+
+  function bodyCriteria() {
+    const cloneName = cloneEv ? cloneEv.name : "the copied event";
+    const cloneList = cloneEv ? (cloneEv.criteria || []).map((c) => esc(c.name)).join(", ") : "";
+    body.innerHTML = `
+      <div class="wz-card">
+        <h3>Scoring criteria</h3>
+        ${W.start === "clone" ? `<label class="wz-opt"><input type="radio" name="wzcrit" value="clone"${W.critMode === "clone" ? " checked" : ""}><span><b>Keep ${esc(cloneName)}'s criteria</b><small>${cloneList}</small></span></label>` : ""}
+        <label class="wz-opt"><input type="radio" name="wzcrit" value="template"${W.critMode === "template" ? " checked" : ""}><span><b>Use a saved type</b><small>Start from a preset rubric.</small></span></label>
+        <label class="wz-sub">Type <select id="wz_tpl"${W.critMode === "template" ? "" : " disabled"}>
+          ${templates.map((t) => `<option value="${esc(t.id)}"${W.templateId === t.id ? " selected" : ""}>${esc(t.name)}${t.category ? " · " + esc(t.category) : ""}</option>`).join("")}
+        </select></label>
+        <div class="wz-crlist" id="wz_tplprev"></div>
+        <label class="wz-opt"><input type="radio" name="wzcrit" value="scratch"${W.critMode === "scratch" ? " checked" : ""}><span><b>Start from scratch</b><small>Add your own criteria later in Set up.</small></span></label>
+      </div>`;
+    const prev = () => {
+      const t = templates.find((x) => x.id === ($("#wz_tpl", body).value || W.templateId));
+      $("#wz_tplprev", body).innerHTML = t ? t.criteria.map((c) => `<span class="pcrit">${esc(c.shortName || c.name)} <b>${Math.round((c.weight || 0) * 100)}%</b></span>`).join("") : "";
+    };
+    body.querySelectorAll("input[name=wzcrit]").forEach((r) => (r.onchange = () => {
+      $("#wz_tpl", body).disabled = body.querySelector("input[name=wzcrit]:checked").value !== "template";
+    }));
+    $("#wz_tpl", body).onchange = prev;
+    prev();
+  }
+
+  function bodyScale() {
+    body.innerHTML = `
+      <div class="wz-card">
+        <div class="row">
+          <label>Judges <input id="wz_judges" type="number" min="1" value="${W.judges}"></label>
+          <label>Restaurants / dishes <input id="wz_rest" type="number" min="1" value="${W.restaurants}"></label>
+        </div>
+        <h3>Tables</h3>
+        <label class="wz-opt"><input type="radio" name="wztables" value="1"${W.tables !== 2 ? " checked" : ""}><span><b>One table</b><small>All judges score every dish.</small></span></label>
+        <label class="wz-opt"><input type="radio" name="wztables" value="2"${W.tables === 2 ? " checked" : ""}><span><b>Two tables (A &amp; B)</b><small>Split judges &amp; dishes across two panels.</small></span></label>
+      </div>
+      <div class="wz-card">
+        <div class="row">
+          <label>First serving time <input id="wz_start" type="time" value="${esc(W.startTime)}"></label>
+          <label>Minutes between dishes <input id="wz_int" type="number" min="1" value="${W.interval}"></label>
+        </div>
+        <h3>Dish delivery</h3>
+        <label class="wz-opt"><input type="radio" name="wzdeliv" value="runner"${W.delivery !== "dropoff" ? " checked" : ""}><span>A runner picks up each dish at its time.</span></label>
+        <label class="wz-opt"><input type="radio" name="wzdeliv" value="dropoff"${W.delivery === "dropoff" ? " checked" : ""}><span>Participants deliver to the judging area.</span></label>
+        <h3>Official ranking method</h3>
+        <label class="wz-opt"><input type="radio" name="wzmethod" value="scaled"${W.method !== "minmax" ? " checked" : ""}><span><b>Scaled</b> — sum of all weighted scores.</span></label>
+        <label class="wz-opt"><input type="radio" name="wzmethod" value="minmax"${W.method === "minmax" ? " checked" : ""}><span><b>Min-Max</b> — drop each dish's high &amp; low first.</span></label>
+      </div>`;
+  }
+
+  function bodyReview() {
+    body.innerHTML = `
+      <div class="wz-card">
+        <h3>Awards</h3>
+        <label>Judges' Choice — winners to name (top N) <input id="wz_jtop" type="number" min="1" value="${W.judgesTopN}"></label>
+        <label class="wz-check"><input type="checkbox" id="wz_pc"${W.pcEnabled ? " checked" : ""}> Enable People's Choice (crowd vote)</label>
+        <div class="row">
+          <label>Vote unit <input id="wz_pcunit" value="${esc(W.pcUnit)}" placeholder="Coins / Beans / Votes"></label>
+          <label>People's Choice top N <input id="wz_pctop" type="number" min="1" value="${W.pcTopN}"></label>
+        </div>
+      </div>
+      <div class="wz-card wz-review"><h3>Review</h3><div id="wz_reviewbody"></div></div>`;
+    const review = () => {
+      readStep();
+      const critDesc = W.critMode === "clone" ? `${cloneEv ? cloneEv.name : "copied"} criteria`
+        : W.critMode === "template" ? (templates.find((t) => t.id === W.templateId) || {}).name + " preset"
+        : "added later (from scratch)";
+      const rows = [
+        ["Event", W.name || "—"],
+        ["Date / venue", [W.date ? fmtDay(W.date) : "", W.venue].filter(Boolean).join(" · ") || "—"],
+        ["Start point", W.start === "clone" ? `copy of ${cloneEv ? cloneEv.name : "an event"}` : "blank event"],
+        ["Criteria", critDesc],
+        ["Judges", `${W.judges}${W.tables === 2 ? " (split A/B)" : ""}`],
+        ["Restaurants / dishes", `${W.restaurants}${W.tables === 2 ? " across 2 tables" : ""}`],
+        ["Schedule", `first at ${fmt12(W.startTime)}, every ${W.interval} min`],
+        ["Delivery", W.delivery === "dropoff" ? "participants deliver" : "runner pickup"],
+        ["Official method", W.method === "minmax" ? "Min-Max" : "Scaled"],
+        ["Judges' Choice", `top ${W.judgesTopN}`],
+        ["People's Choice", W.pcEnabled ? `on — ${W.pcUnit}, top ${W.pcTopN}` : "off"],
+      ];
+      $("#wz_reviewbody", body).innerHTML = rows.map((r) => `<div class="wz-rev"><span>${esc(r[0])}</span><b>${esc(r[1])}</b></div>`).join("");
+    };
+    body.querySelectorAll("input").forEach((i) => i.addEventListener("input", review));
+    review();
+  }
+
+  function drawNav() {
+    const nav = $(".wz-nav", host);
+    const last = step === STEPS.length - 1;
+    nav.innerHTML = `${step > 0 ? `<button class="mini" id="wzBack">← Back</button>` : "<span></span>"}<button class="primary" id="wzNext">${last ? "✓ Create event" : "Next →"}</button>`;
+    if (step > 0) $("#wzBack", nav).onclick = () => { readStep(); step -= 1; draw(); };
+    $("#wzNext", nav).onclick = async () => {
+      readStep();
+      if (step === 0) {
+        if (!W.name) { alert("Give the event a name."); return; }
+        if (W.start === "clone" && !W.cloneId) { alert("Choose an event to copy, or pick “A blank event”."); return; }
+        await maybeLoadClone();
+      }
+      if (last) return create($("#wzNext", nav));
+      step += 1; draw();
+    };
+  }
+
+  async function create(btn) {
+    let id = slug(W.name) || "event-" + uid().slice(0, 5);
+    if (existingIds.has(id)) id = id + "-" + uid().slice(0, 4);
+    const ev = blankEvent(id);
+    ev.name = W.name; ev.eventDate = W.date; ev.venue = W.venue; ev.status = "draft";
+    ev.schedule = { startTime: W.startTime, intervalMin: W.interval };
+    ev.deliveryMode = W.delivery; ev.officialMethod = W.method;
+    ev.awards = { judgesTopN: W.judgesTopN, peoples: { enabled: W.pcEnabled, unit: W.pcUnit || "Coins", topN: W.pcTopN } };
+    if (W.critMode === "clone" && cloneEv) ev.criteria = (cloneEv.criteria || []).map((c) => ({ ...c, id: uid("c") }));
+    else if (W.critMode === "template") { const t = templates.find((x) => x.id === W.templateId); ev.criteria = t ? templateCriteria(t, uid) : []; }
+    else ev.criteria = [];
+    ev.judges = scaffoldJudges(W.judges, W.tables, W.start === "clone" && cloneEv ? cloneEv.judges : null);
+    ev.teams = scaffoldTeams(W.restaurants, W.tables, W.startTime, W.interval);
+    btn.disabled = true; btn.textContent = "Creating…";
+    try {
+      await saveEvent(id, ev);
+      LS.setActiveEvent(id);
+      toast("✓ Event created — add names & details");
+      location.hash = "#/admin";
+    } catch (err) {
+      btn.disabled = false; btn.textContent = "✓ Create event";
+      alert("Couldn't create the event — check your connection and try again.");
+    }
+  }
+
+  function draw() {
+    drawSteps();
+    if (step === 0) bodyBasics();
+    else if (step === 1) bodyCriteria();
+    else if (step === 2) bodyScale();
+    else bodyReview();
+    drawNav();
+  }
+  draw();
 }
 
 // ---------- SAMPLE BALLOT (inert demo — nothing saves or navigates) ----------

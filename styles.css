@@ -560,3 +560,31 @@ input, select {
 
 .toast { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%) translateY(20px); background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 20px; opacity: 0; transition: all .25s; z-index: 50; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------- NEW-EVENT WIZARD ---------- */
+.wizard { max-width: 640px; }
+.wz-steps { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0 16px; }
+.wz-step { font-size: 12px; font-weight: 700; color: var(--muted); }
+.wz-step.on { color: var(--brand); }
+.wz-step.done { color: var(--ink); }
+.wz-body { display: flex; flex-direction: column; gap: 14px; }
+.wz-card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; box-shadow: var(--shadow); }
+.wz-card h3 { margin: 2px 0 10px; font-size: 15px; }
+.wz-card > label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+.wz-card > label input, .wz-card > label select { font-size: 16px; }
+.wz-card .row { display: flex; gap: 12px; }
+.wz-card .row > label { flex: 1; }
+.wz-opt { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; cursor: pointer; }
+.wz-opt input { margin-top: 3px; flex: none; }
+.wz-opt span { display: flex; flex-direction: column; gap: 2px; }
+.wz-opt small { color: var(--muted); font-size: 12px; }
+.wz-opt:has(input:checked) { border-color: var(--brand); background: rgba(181, 54, 31, 0.05); }
+.wz-sub { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); margin: 0 0 6px 30px; }
+.wz-crlist { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px 30px; }
+.wz-crlist .pcrit { font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; }
+.wz-check { flex-direction: row !important; align-items: center; gap: 8px !important; color: var(--ink) !important; font-size: 15px !important; }
+.wz-check input { flex: none; }
+.wz-review .wz-rev { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.wz-review .wz-rev span { color: var(--muted); }
+.wz-review .wz-rev b { text-align: right; }
+.wz-nav { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 18px 0 8px; }
