@@ -137,6 +137,19 @@ function gradeBadge(ig, label = "Integrity") {
   return `<div class="grade g${ig.grade}"><span class="grade-l">${ig.grade}</span><span class="grade-m"><b>${esc(label)} ${ig.score}/100</b><span>${esc(ig.meaning)}</span></span></div>`;
 }
 
+// Describe winner robustness by flip distance (min judges to change the winner).
+function robustnessLabel(wr, jname) {
+  if (!wr) return { tag: "—", cls: "", detail: "" };
+  const fd = wr.flipDistance;
+  if (fd == null || fd >= 4) return { tag: "✓ robust", cls: "ok", detail: "the win holds unless 4+ judges change" };
+  if (fd === 1) {
+    const who = wr.pivotal.length ? " (" + wr.pivotal.slice(0, 3).map((p) => esc(jname(p.judgeId))).join(", ") + ")" : "";
+    return { tag: "⚠ fragile", cls: "warn", detail: "one judge can flip the winner" + who };
+  }
+  if (fd === 2) return { tag: "⚠ fragile", cls: "warn", detail: "just 2 judges could change the winner" };
+  return { tag: "△ modest", cls: "", detail: "it takes 3 judges to change the winner" };
+}
+
 // Shared sub-navigation tabs for the Event Admin and Analytics hubs.
 function hubTabs(kind, active) {
   const tabs = kind === "admin"
@@ -2104,7 +2117,7 @@ function renderAnalytics(ev, scores, reveal) {
     <div class="integ-grid">
       <div class="integ-item"><span class="integ-k">Panel agreement</span><b>${pa.r == null ? "—" : pa.r}</b><span class="integ-v">${esc(pa.label)}${pa.pairs ? ` · ${pa.pairs} pairs` : ""}</span></div>
       <div class="integ-item"><span class="integ-k">Winner margin</span><b>${wr ? wr.margin : "—"}</b><span class="integ-v">${wr ? `${wr.marginPct}% over 2nd${wr.tieBroken ? " · tiebroken" : ""}` : ""}</span></div>
-      <div class="integ-item"><span class="integ-k">Robustness</span><b class="${wr && wr.stable ? "ok" : "warn"}">${wr ? (wr.stable ? "✓ stable" : "⚠ fragile") : "—"}</b><span class="integ-v">${wr ? (wr.stable ? `win holds dropping any 1 of ${wr.judgeCount} judges` : `${wr.pivotal.map((p) => esc(jn(p.judgeId, p.newWinnerName && ""))).join(", ")} would flip it`) : ""}</span></div>
+      ${(() => { const rl = robustnessLabel(wr, (jid) => jn(jid)); return `<div class="integ-item"><span class="integ-k">Robustness</span><b class="${rl.cls}">${rl.tag}</b><span class="integ-v">${rl.detail}</span></div>`; })()}
       <div class="integ-item"><span class="integ-k">Serving drift</span><b>${dr ? (dr.slope > 0 ? "+" : "") + dr.slope : "—"}</b><span class="integ-v">${dr ? esc(dr.direction) : "not enough data"}</span></div>
     </div>
     ${outs.length
@@ -2886,7 +2899,7 @@ async function renderHistory(mode) {
       <div class="integ-grid">
         <div class="integ-item"><span class="integ-k">Panel agreement</span><b>${pa.r == null ? "—" : pa.r}</b><span class="integ-v">${esc(pa.label)}</span></div>
         <div class="integ-item"><span class="integ-k">Winner margin</span><b>${wr ? wr.margin : "—"}</b><span class="integ-v">${wr ? `${wr.marginPct}% over 2nd${wr.tieBroken ? " · tiebroken" : ""}` : ""}</span></div>
-        <div class="integ-item"><span class="integ-k">Robustness</span><b class="${wr && wr.stable ? "ok" : "warn"}">${wr ? (wr.stable ? "✓ stable" : "⚠ fragile") : "—"}</b><span class="integ-v">${wr ? (wr.stable ? "holds dropping any judge" : wr.pivotal.map((p) => esc(jname(p.judgeId))).join(", ") + " would flip it") : ""}</span></div>
+        ${(() => { const rl = robustnessLabel(wr, (jid) => jname(jid)); return `<div class="integ-item"><span class="integ-k">Robustness</span><b class="${rl.cls}">${rl.tag}</b><span class="integ-v">${rl.detail}</span></div>`; })()}
         <div class="integ-item"><span class="integ-k">Serving drift</span><b>${dr ? (dr.slope > 0 ? "+" : "") + dr.slope : "—"}</b><span class="integ-v">${dr ? esc(dr.direction) : "not enough data"}</span></div>
       </div>
       ${outs.length ? `<p class="hint">Outlier ballots: ${outs.slice(0, 4).map((o) => esc(jname(o.judgeId, o.judgeName)) + " on " + esc(o.dish || "#" + o.code) + " (" + (o.delta > 0 ? "+" : "") + o.delta + ")").join("; ")}</p>` : `<p class="hint">No outlier ballots — every judge scored within 1.0 of each dish's consensus.</p>`}`;

@@ -399,7 +399,7 @@ export async function buildReportDoc(ev, scores, peoples, aw) {
   const integ = [
     `Panel agreement: ${pa.r == null ? "—" : pa.r} (${pa.label}${pa.pairs ? ", " + pa.pairs + " judge pairs" : ""}).`,
     wr ? `Winner margin: ${wr.margin} pts (${wr.marginPct}% over 2nd${wr.tieBroken ? ", tiebroken" : ""}).` : "",
-    wr ? `Robustness: ${wr.stable ? "the win holds even if any single judge is dropped." : "fragile — dropping " + wr.pivotal.map((p) => nameOf[p.judgeId] || p.judgeId).join(", ") + " would change the winner."}` : "",
+    wr ? "Robustness: " + ((fd) => fd == null || fd >= 4 ? "robust — the win holds unless 4+ judges change." : fd === 1 ? "fragile — one judge (" + wr.pivotal.slice(0, 3).map((p) => nameOf[p.judgeId] || p.judgeId).join(", ") + ") can flip the winner." : fd === 2 ? "fragile — just 2 judges could change the winner." : "modest — it takes 3 judges to change the winner.")(wr.flipDistance) : "",
     drift ? `Serving-order drift: ${drift.slope > 0 ? "+" : ""}${drift.slope}/position — ${drift.direction}.` : "",
   ].filter(Boolean);
   y = para(integ.join(" "), y, 8.8, RPT.ink);

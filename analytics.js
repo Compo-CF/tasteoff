@@ -459,25 +459,57 @@ export function panelAgreement(criteria, teams, scores) {
   return { r, pairs: rs.length, label };
 }
 
-// Winner robustness: does the official winner survive dropping any one judge?
+// Winner robustness: how many judges would have to be removed before the
+// winner changes (the "flip distance"). 1 = a single judge can flip it (very
+// fragile); 4+ = robust. Margin is reported but NOT used to judge fragility —
+// a close race is the nature of the competition, not a data flaw.
 export function winnerRobustness(event, scores) {
   const method = methodOf(event);
-  const full = officialRanked(event, scores || []);
+  const all = scores || [];
+  const full = officialRanked(event, all);
   if (!full.length) return null;
   const winner = full[0], runner = full[1] || null;
   const wval = officialVal(winner, method), rval = runner ? officialVal(runner, method) : 0;
   const margin = round2(wval - rval);
-  const judgeIds = [...new Set((scores || []).map((s) => s.judgeId))];
+  const judgeIds = [...new Set(all.map((s) => s.judgeId))];
+
+  // single-judge flippers (for naming when flip distance == 1)
   const pivotal = [];
   judgeIds.forEach((jid) => {
-    const lb = officialRanked(event, (scores || []).filter((s) => s.judgeId !== jid));
+    const lb = officialRanked(event, all.filter((s) => s.judgeId !== jid));
     if (lb.length && lb[0].code !== winner.code) pivotal.push({ judgeId: jid, newWinnerCode: lb[0].code, newWinnerName: lb[0].name });
   });
+
+  // greedy flip distance: repeatedly drop the judge that shrinks the winner's
+  // lead most, until the winner changes. Capped for cost.
+  const cap = Math.min(judgeIds.length - 1, 6);
+  let remaining = all.slice();
+  const removed = new Set();
+  let flipDistance = null;
+  for (let step = 1; step <= cap; step++) {
+    let best = null;
+    for (const jid of judgeIds) {
+      if (removed.has(jid)) continue;
+      const lb = officialRanked(event, remaining.filter((s) => s.judgeId !== jid));
+      if (!lb.length) continue;
+      const flips = lb[0].code !== winner.code;
+      const wRow = lb.find((r) => r.code === winner.code);
+      const gap = wRow && wRow.place === 1 && lb[1] ? officialVal(lb[0], method) - officialVal(lb[1], method) : -Infinity;
+      const cand = { jid, flips, gap };
+      if (!best || (cand.flips && !best.flips) || (cand.flips === best.flips && cand.gap < best.gap)) best = cand;
+    }
+    if (!best) break;
+    removed.add(best.jid);
+    remaining = remaining.filter((s) => s.judgeId !== best.jid);
+    if (best.flips) { flipDistance = step; break; }
+  }
+  // null flipDistance => couldn't flip within cap => robust
   return {
     winner, runner, margin,
     marginPct: wval ? Math.round((margin / wval) * 1000) / 10 : 0,
     tieBroken: !!winner.tieBroken,
-    stable: pivotal.length === 0,
+    flipDistance,                                  // 1..cap, or null (>cap = robust)
+    stable: flipDistance == null || flipDistance >= 4,
     pivotal,
     judgeCount: judgeIds.length,
   };
@@ -541,27 +573,29 @@ export function integrityGrade(event, scores, pre) {
   if (!wr) return null; // no scored result to grade
   const clamp = (x) => Math.max(0, Math.min(1, x));
   const nTeams = teams.length || 1;
-  const jc = wr.judgeCount || 1;
   const rAgree = pa.r == null ? 0.3 : pa.r;                    // neutral if no overlap
-  // Panel consensus (0–30): food judging runs ~0.3, so r≈0.4 is already strong.
-  const agreement = clamp((rAgree + 0.10) / 0.50) * 30;
-  // Decisiveness (0–25): mostly the margin; a stable win (or few pivotal judges)
-  // adds up to 10. A close race in a big field isn't a data flaw, so it's gentle.
-  const decisiveness = clamp(wr.marginPct / 5) * 15 + (wr.stable ? 10 : clamp(1 - wr.pivotal.length / jc) * 10);
-  // Serving steadiness (0–20): penalize real palate drift.
-  const steadiness = dr ? clamp(1 - Math.abs(dr.slope) / 0.10) * 20 : 15;
+  // Panel consensus (0–45) — the dominant signal: do the judges rank dishes
+  // alike? Food judging runs ~0.3, so r≈0.4 is already strong agreement.
+  const agreement = clamp((rAgree + 0.10) / 0.50) * 45;
+  // Robustness (0–15) from flip distance (min judges to change the winner).
+  // Deliberately light: a single-judge flip is common in tight, well-run
+  // competitions, so it's a mild ding — real fragility only compounds it.
+  const fd = wr.flipDistance;
+  const robustness = fd == null || fd >= 4 ? 15 : fd === 3 ? 13 : fd === 2 ? 11 : 8;
+  // Serving steadiness (0–15): penalize real palate drift.
+  const steadiness = dr ? clamp(1 - Math.abs(dr.slope) / 0.10) * 15 : 11;
   // Clean ballots (0–25): outliers per dish; ~0.8/dish is where it bottoms out.
   const clean = clamp(1 - (outs.length / Math.max(1, nTeams)) / 0.8) * 25;
-  const score = Math.round(agreement + decisiveness + steadiness + clean);
+  const score = Math.round(agreement + robustness + steadiness + clean);
   const grade = score >= 85 ? "A" : score >= 72 ? "B" : score >= 58 ? "C" : score >= 45 ? "D" : "F";
   const meaning = {
-    A: "rock-solid — strong consensus, decisive & clean",
+    A: "rock-solid — strong consensus, robust & clean",
     B: "sound — a dependable result",
-    C: "defensible, but a close or loosely-agreed call",
-    D: "shaky — the result hinged on a few ballots",
-    F: "fragile — treat the ranking with caution",
+    C: "defensible — loosely-agreed or a little fragile",
+    D: "shaky — a couple of judges could reorder it",
+    F: "fragile — the ranking hinges on one or two ballots",
   }[grade];
-  return { score, grade, meaning, parts: { agreement: Math.round(agreement), decisiveness: Math.round(decisiveness), steadiness: Math.round(steadiness), clean: Math.round(clean) }, pa, wr, dr, outs };
+  return { score, grade, meaning, parts: { agreement: Math.round(agreement), robustness: Math.round(robustness), steadiness: Math.round(steadiness), clean: Math.round(clean) }, pa, wr, dr, outs };
 }
 
 // Overall judge grade (A–F) from calibration (fairness vs field), consistency
