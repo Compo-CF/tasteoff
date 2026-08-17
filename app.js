@@ -21,7 +21,7 @@ import {
 import { BUILTIN_TEMPLATES, templateCriteria } from "./templates.js";
 import { computeLeaderboards, SCORE_STEPS } from "./scoring.js";
 import { parseFile, parseGoogleSheet, workbookToTemplates } from "./import-sheet.js";
-import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles, eventsOverview, restaurantHistory, participantProfile, explainWinner } from "./analytics.js";
+import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles, eventsOverview, restaurantHistory, participantProfile, explainWinner, panelAgreement, winnerRobustness, servingDrift, outlierBallots } from "./analytics.js";
 import { barChart, divergingChart, histogram, radar } from "./charts.js";
 import { exportReportPDF } from "./report.js";
 
@@ -2083,12 +2083,34 @@ function renderAnalytics(ev, scores, reveal) {
   const card = (title, sub, body) =>
     `<div class="acard"><h4>${esc(title)}</h4>${sub ? `<p class="asub">${esc(sub)}</p>` : ""}${body}</div>`;
 
+  // ---- result-integrity block ----
+  const pa = panelAgreement(ev.criteria, ev.teams, scores);
+  const wr = winnerRobustness(ev, scores);
+  const dr = servingDrift(ev.criteria, ev.teams, scores);
+  const outs = outlierBallots(ev.criteria, ev.teams, scores);
+  const jn = (jid, fallback) => judgeName[jid] || fallback || jid; // judge names aren't blind
+  const dishLbl = (code, name) => (reveal ? (name || "#" + code) : "Team #" + code);
+  const integ = `<div class="acard integ">
+    <h4>Result integrity</h4>
+    <p class="asub">How much the panel agreed, how decisive the win was, and any scoring quirks.</p>
+    <div class="integ-grid">
+      <div class="integ-item"><span class="integ-k">Panel agreement</span><b>${pa.r == null ? "—" : pa.r}</b><span class="integ-v">${esc(pa.label)}${pa.pairs ? ` · ${pa.pairs} pairs` : ""}</span></div>
+      <div class="integ-item"><span class="integ-k">Winner margin</span><b>${wr ? wr.margin : "—"}</b><span class="integ-v">${wr ? `${wr.marginPct}% over 2nd${wr.tieBroken ? " · tiebroken" : ""}` : ""}</span></div>
+      <div class="integ-item"><span class="integ-k">Robustness</span><b class="${wr && wr.stable ? "ok" : "warn"}">${wr ? (wr.stable ? "✓ stable" : "⚠ fragile") : "—"}</b><span class="integ-v">${wr ? (wr.stable ? `win holds dropping any 1 of ${wr.judgeCount} judges` : `${wr.pivotal.map((p) => esc(jn(p.judgeId, p.newWinnerName && ""))).join(", ")} would flip it`) : ""}</span></div>
+      <div class="integ-item"><span class="integ-k">Serving drift</span><b>${dr ? (dr.slope > 0 ? "+" : "") + dr.slope : "—"}</b><span class="integ-v">${dr ? esc(dr.direction) : "not enough data"}</span></div>
+    </div>
+    ${outs.length
+      ? `<div class="integ-out"><b>Outlier ballots</b> <span class="hint">a judge ≥1.0 off the dish's consensus</span><ul>${outs.slice(0, 6).map((o) => `<li>${esc(jn(o.judgeId, o.judgeName))} on ${esc(dishLbl(o.code, o.dish))}: <b>${o.judgeAvg}</b> vs ${o.consensus} (${o.delta > 0 ? "+" : ""}${o.delta})</li>`).join("")}</ul></div>`
+      : `<p class="hint">No outlier ballots — every judge scored within 1.0 of each dish's consensus.</p>`}
+  </div>`;
+
   const wrap = el(`<div class="analytics">
     <div class="astat">
       <div><b>${a.fieldAvg}</b><span>field average</span></div>
       <div><b>${a.strongest ? esc(a.strongest.short) : "–"}</b><span>strongest facet</span></div>
       <div><b>${a.weakest ? esc(a.weakest.short) : "–"}</b><span>weakest facet</span></div>
     </div>
+    ${integ}
     <div class="agrid">
       ${card("Average score by criterion", "Which facets scored high across all dishes", critBars)}
       ${card("Score distribution", "How judges used the 1–5 scale", disto)}

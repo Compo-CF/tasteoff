@@ -404,3 +404,128 @@ export function judgeProfiles(roster, events, scoresByEvent) {
       .sort((a, b) => (b.eventDate || "").localeCompare(a.eventDate || "") || String(a.event).localeCompare(String(b.event))),
   })).sort((a, b) => b.eventsJudged - a.eventsJudged || b.dishesScored - a.dishesScored);
 }
+
+// ---- Result-integrity analytics (per event) --------------------------------
+
+// Panel agreement: average pairwise Spearman correlation of judges' per-dish
+// weighted totals. Only judge pairs sharing >=3 dishes count (tables don't overlap).
+export function panelAgreement(criteria, teams, scores) {
+  const wById = Object.fromEntries((criteria || []).map((c) => [c.id, +c.weight || 0]));
+  const byJudge = {};
+  for (const s of scores || []) {
+    const cs = s.criterionScores || {};
+    let tot = 0, any = false;
+    for (const cid of Object.keys(cs)) {
+      const v = cs[cid];
+      if (typeof v === "number" && v > 0) { tot += (wById[cid] || 0) * v; any = true; }
+    }
+    if (any) (byJudge[s.judgeId] = byJudge[s.judgeId] || {})[s.teamCode] = tot;
+  }
+  const judges = Object.keys(byJudge);
+  const rankMap = (obj, codes) => {
+    const arr = codes.map((c) => ({ c, v: obj[c] })).sort((a, b) => a.v - b.v);
+    const rank = {};
+    let i = 0;
+    while (i < arr.length) {
+      let j = i;
+      while (j + 1 < arr.length && arr[j + 1].v === arr[i].v) j++;
+      const r = (i + j) / 2 + 1;
+      for (let k = i; k <= j; k++) rank[arr[k].c] = r;
+      i = j + 1;
+    }
+    return rank;
+  };
+  const pearson = (xs, ys) => {
+    const n = xs.length; if (n < 2) return 0;
+    const mx = mean(xs), my = mean(ys);
+    let num = 0, dx = 0, dy = 0;
+    for (let i = 0; i < n; i++) { const a = xs[i] - mx, b = ys[i] - my; num += a * b; dx += a * a; dy += b * b; }
+    return dx && dy ? num / Math.sqrt(dx * dy) : 0;
+  };
+  const rs = [];
+  for (let a = 0; a < judges.length; a++) {
+    for (let b = a + 1; b < judges.length; b++) {
+      const ja = byJudge[judges[a]], jb = byJudge[judges[b]];
+      const common = Object.keys(ja).filter((c) => c in jb);
+      if (common.length < 3) continue;
+      const ra = rankMap(ja, common), rb = rankMap(jb, common);
+      rs.push(pearson(common.map((c) => ra[c]), common.map((c) => rb[c])));
+    }
+  }
+  const r = rs.length ? round2(mean(rs)) : null;
+  const label = r == null ? "not enough overlap"
+    : r >= 0.7 ? "strong consensus" : r >= 0.4 ? "moderate agreement"
+    : r >= 0.15 ? "loose agreement" : "divided panel";
+  return { r, pairs: rs.length, label };
+}
+
+// Winner robustness: does the official winner survive dropping any one judge?
+export function winnerRobustness(event, scores) {
+  const method = methodOf(event);
+  const full = officialRanked(event, scores || []);
+  if (!full.length) return null;
+  const winner = full[0], runner = full[1] || null;
+  const wval = officialVal(winner, method), rval = runner ? officialVal(runner, method) : 0;
+  const margin = round2(wval - rval);
+  const judgeIds = [...new Set((scores || []).map((s) => s.judgeId))];
+  const pivotal = [];
+  judgeIds.forEach((jid) => {
+    const lb = officialRanked(event, (scores || []).filter((s) => s.judgeId !== jid));
+    if (lb.length && lb[0].code !== winner.code) pivotal.push({ judgeId: jid, newWinnerCode: lb[0].code, newWinnerName: lb[0].name });
+  });
+  return {
+    winner, runner, margin,
+    marginPct: wval ? Math.round((margin / wval) * 1000) / 10 : 0,
+    tieBroken: !!winner.tieBroken,
+    stable: pivotal.length === 0,
+    pivotal,
+    judgeCount: judgeIds.length,
+  };
+}
+
+// Serving-order drift: linear trend of per-dish-per-judge average vs serve order.
+export function servingDrift(criteria, teams, scores) {
+  const orderOf = Object.fromEntries((teams || []).map((t) => [t.code, t.dishNumber || null]));
+  const pts = [];
+  for (const s of scores || []) {
+    const vals = Object.values(s.criterionScores || {}).filter((v) => typeof v === "number" && v > 0);
+    const x = orderOf[s.teamCode];
+    if (vals.length && x) pts.push({ x, y: mean(vals) });
+  }
+  if (pts.length < 4) return null;
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+  const mx = mean(xs), my = mean(ys);
+  let num = 0, den = 0, dy = 0;
+  for (let i = 0; i < pts.length; i++) { const a = xs[i] - mx; num += a * (ys[i] - my); den += a * a; dy += (ys[i] - my) ** 2; }
+  const slope = den ? num / den : 0;
+  const span = Math.max(...xs) - Math.min(...xs);
+  return {
+    slope: round2(slope),
+    perEvent: round2(slope * span),
+    r: den && dy ? round2(num / Math.sqrt(den * dy)) : 0,
+    direction: slope > 0.02 ? "later dishes scored higher" : slope < -0.02 ? "later dishes scored lower (possible palate fatigue)" : "no meaningful drift",
+    n: pts.length,
+  };
+}
+
+// Outlier ballots: a judge's dish average far from that dish's consensus.
+export function outlierBallots(criteria, teams, scores, threshold = 1.0) {
+  const teamName = Object.fromEntries((teams || []).map((t) => [t.code, t.name]));
+  const byDish = {};
+  for (const s of scores || []) {
+    const vals = Object.values(s.criterionScores || {}).filter((v) => typeof v === "number" && v > 0);
+    if (!vals.length) continue;
+    (byDish[s.teamCode] = byDish[s.teamCode] || []).push({ judgeId: s.judgeId, judgeName: s.judgeName, avg: mean(vals) });
+  }
+  const out = [];
+  Object.keys(byDish).forEach((code) => {
+    const arr = byDish[code];
+    if (arr.length < 3) return;
+    const consensus = mean(arr.map((a) => a.avg));
+    arr.forEach((a) => {
+      const delta = a.avg - consensus;
+      if (Math.abs(delta) >= threshold) out.push({ judgeId: a.judgeId, judgeName: a.judgeName, code, dish: teamName[code], judgeAvg: round2(a.avg), consensus: round2(consensus), delta: round2(delta) });
+    });
+  });
+  return out.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+}

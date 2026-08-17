@@ -3,7 +3,7 @@
 // methodology). Uses the vendored jsPDF (window.jspdf) and draws charts on an
 // offscreen canvas. Pure: depends only on scoring/analytics helpers + jsPDF.
 import { computeLeaderboards } from "./scoring.js";
-import { eventAnalytics, dishAnalytics } from "./analytics.js";
+import { eventAnalytics, dishAnalytics, panelAgreement, winnerRobustness, servingDrift, outlierBallots } from "./analytics.js";
 
 const RPT = {
   brick: "#B5361F", ember: "#E08A2C", gold: "#F0B44E", goldm: "#EBA93C",
@@ -381,10 +381,29 @@ export async function buildReportDoc(ev, scores, peoples, aw) {
   });
   y = drawTable(y, ddCols, ["#", "Dish / Team", ...sh, "Spread", "Read"], ddBody, { center: [0, ...criteria.map((_, i) => i + 2), criteria.length + 2, criteria.length + 3], fs: 8.5, rowH: 18, badges: lbBadges });
   y += 14;
+  if (y > PH - 210) y = newPage();
   setF("bold", 12.5); setC(RPT.ink); T("Highlights", M, y); y += 16;
   y = para("Criterion champions — " + critChamp.map((c) => `${c.crit}: ${c.name} (${c.v})`).join("   ·   "), y, 8.8, RPT.ink);
   if (divisive && tightest) y = para(`Most divisive dish: ${divisive.name || "#" + divisive.code} (judge spread ${divisive.spread}). Tightest consensus: ${tightest.name || "#" + tightest.code} (spread ${tightest.spread}).`, y, 8.8, RPT.ink);
+  // ---- result integrity ----
+  const pa = panelAgreement(criteria, teams, scores);
+  const wr = winnerRobustness(ev, scores);
+  const drift = servingDrift(criteria, teams, scores);
+  const outs = outlierBallots(criteria, teams, scores);
+  y += 8;
+  setF("bold", 12.5); setC(RPT.ink); T("Result integrity", M, y); y += 15;
+  const integ = [
+    `Panel agreement: ${pa.r == null ? "—" : pa.r} (${pa.label}${pa.pairs ? ", " + pa.pairs + " judge pairs" : ""}).`,
+    wr ? `Winner margin: ${wr.margin} pts (${wr.marginPct}% over 2nd${wr.tieBroken ? ", tiebroken" : ""}).` : "",
+    wr ? `Robustness: ${wr.stable ? "the win holds even if any single judge is dropped." : "fragile — dropping " + wr.pivotal.map((p) => nameOf[p.judgeId] || p.judgeId).join(", ") + " would change the winner."}` : "",
+    drift ? `Serving-order drift: ${drift.slope > 0 ? "+" : ""}${drift.slope}/position — ${drift.direction}.` : "",
+  ].filter(Boolean);
+  y = para(integ.join(" "), y, 8.8, RPT.ink);
+  y = para(outs.length
+    ? "Outlier ballots (1.0+ off consensus): " + outs.slice(0, 4).map((o) => `${nameOf[o.judgeId] || o.judgeName || o.judgeId} on ${o.dish || "#" + o.code} (${o.delta > 0 ? "+" : ""}${o.delta})`).join("; ") + "."
+    : "No outlier ballots — every judge scored within 1.0 of each dish's consensus.", y, 8.4, RPT.muted);
   y += 6;
+  if (y > PH - 150) y = newPage();
   setF("bold", 12.5); setC(RPT.ink); T("How scoring works", M, y); y += 16;
   const wline = equalW ? `all ${criteria.length} criteria carried equal weight (${wpct(criteria[0])}% each)` : criteria.map((c) => `${c.name} ${wpct(c)}%`).join(", ");
   y = para(`Criteria & weights: ${wline}.`, y, 8.4, RPT.muted);
