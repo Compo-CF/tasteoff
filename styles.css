@@ -627,3 +627,5 @@ input, select {
 .integ-out { margin-top: 12px; }
 .integ-out ul { margin: 6px 0 0; padding-left: 18px; }
 .integ-out li { font-size: 13px; margin-bottom: 3px; }
+
+.dd-acts { display: flex; gap: 8px; align-items: center; }

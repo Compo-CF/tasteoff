@@ -2855,15 +2855,33 @@ async function renderHistory(mode) {
     const pub = ev.publishedWinner && ev.publishedWinner !== w.winner
       ? `<p class="pubnote">🏅 Published/announced winner: <b>${esc(ev.publishedWinner)}</b> — the trophy actually awarded that night. It differs from the score-computed leader shown here; this app ranks strictly from the judging spreadsheet, so the computed champion stays authoritative.</p>`
       : "";
+    // Result integrity for this historical event.
+    const scr = scoresByEvent[eventId] || [];
+    const pa = panelAgreement(ev.criteria, ev.teams, scr);
+    const wr = winnerRobustness(ev, scr);
+    const dr = servingDrift(ev.criteria, ev.teams, scr);
+    const outs = outlierBallots(ev.criteria, ev.teams, scr);
+    const jn = Object.fromEntries((ev.judges || []).map((j) => [j.id, j.name]));
+    const jname = (jid, fb) => jn[jid] || fb || jid;
+    const integ = `<h4>Result integrity</h4>
+      <div class="integ-grid">
+        <div class="integ-item"><span class="integ-k">Panel agreement</span><b>${pa.r == null ? "—" : pa.r}</b><span class="integ-v">${esc(pa.label)}</span></div>
+        <div class="integ-item"><span class="integ-k">Winner margin</span><b>${wr ? wr.margin : "—"}</b><span class="integ-v">${wr ? `${wr.marginPct}% over 2nd${wr.tieBroken ? " · tiebroken" : ""}` : ""}</span></div>
+        <div class="integ-item"><span class="integ-k">Robustness</span><b class="${wr && wr.stable ? "ok" : "warn"}">${wr ? (wr.stable ? "✓ stable" : "⚠ fragile") : "—"}</b><span class="integ-v">${wr ? (wr.stable ? "holds dropping any judge" : wr.pivotal.map((p) => esc(jname(p.judgeId))).join(", ") + " would flip it") : ""}</span></div>
+        <div class="integ-item"><span class="integ-k">Serving drift</span><b>${dr ? (dr.slope > 0 ? "+" : "") + dr.slope : "—"}</b><span class="integ-v">${dr ? esc(dr.direction) : "not enough data"}</span></div>
+      </div>
+      ${outs.length ? `<p class="hint">Outlier ballots: ${outs.slice(0, 4).map((o) => esc(jname(o.judgeId, o.judgeName)) + " on " + esc(o.dish || "#" + o.code) + " (" + (o.delta > 0 ? "+" : "") + o.delta + ")").join("; ")}</p>` : `<p class="hint">No outlier ballots — every judge scored within 1.0 of each dish's consensus.</p>`}`;
     const ov = el(`<div class="modal-ov"><div class="modal wide">
-      <div class="dd-head"><h3>🏆 ${esc(w.winner)}</h3><button class="mini" id="wClose">close</button></div>
+      <div class="dd-head"><h3>🏆 ${esc(w.winner)}</h3><div class="dd-acts"><button class="mini primary" id="wPdf">⬇ PDF report</button><button class="mini" id="wClose">close</button></div></div>
       <p class="sub">${esc(ev.name)} · winner (${esc(w.method)})</p>
       ${pub}
       <p class="whytext">${esc(w.summary)}</p>
       <h4>Winner vs. field, by criterion</h4>
       <table class="dd-judges"><thead><tr><th>Criterion</th><th>Winner</th><th>Field</th><th>Δ</th></tr></thead><tbody>${critRows}</tbody></table>
+      ${integ}
     </div></div>`);
     $("#wClose", ov).onclick = () => ov.remove();
+    $("#wPdf", ov).onclick = () => exportReportPDF(ev, scr, {}, eventAwards(ev));
     ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
     document.body.appendChild(ov);
   }
