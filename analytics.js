@@ -563,3 +563,23 @@ export function integrityGrade(event, scores, pre) {
   }[grade];
   return { score, grade, meaning, parts: { agreement: Math.round(agreement), decisiveness: Math.round(decisiveness), steadiness: Math.round(steadiness), clean: Math.round(clean) }, pa, wr, dr, outs };
 }
+
+// Overall judge grade (A–F) from calibration (fairness vs field), consistency
+// (discriminating but not erratic), and experience (track-record depth).
+export function judgeGrade(p) {
+  if (!p || !p.dishesScored) return null;
+  const clamp = (x) => Math.max(0, Math.min(1, x));
+  const calibration = clamp(1 - Math.abs(p.generosity || 0) / 0.5) * 40;      // 0–40, fair scorer
+  const consistency = clamp(1 - Math.abs((p.consistency || 0) - 0.8) / 0.7) * 35; // 0–35, σ≈0.8 ideal
+  const experience = clamp(p.dishesScored / 50) * 15 + clamp(p.eventsJudged / 3) * 10; // 0–25
+  const score = Math.round(calibration + consistency + experience);
+  const grade = score >= 85 ? "A" : score >= 72 ? "B" : score >= 58 ? "C" : score >= 45 ? "D" : "F";
+  const meaning = {
+    A: "elite — experienced, fair & consistent",
+    B: "strong, dependable judge",
+    C: "solid contributor",
+    D: "developing — thin record or off-calibration",
+    F: "erratic or heavily skewed scorer",
+  }[grade];
+  return { score, grade, meaning, parts: { calibration: Math.round(calibration), consistency: Math.round(consistency), experience: Math.round(experience) } };
+}

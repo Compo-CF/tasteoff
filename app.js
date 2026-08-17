@@ -21,7 +21,7 @@ import {
 import { BUILTIN_TEMPLATES, templateCriteria } from "./templates.js";
 import { computeLeaderboards, SCORE_STEPS } from "./scoring.js";
 import { parseFile, parseGoogleSheet, workbookToTemplates } from "./import-sheet.js";
-import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles, eventsOverview, restaurantHistory, participantProfile, explainWinner, panelAgreement, winnerRobustness, servingDrift, outlierBallots, integrityGrade } from "./analytics.js";
+import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles, eventsOverview, restaurantHistory, participantProfile, explainWinner, panelAgreement, winnerRobustness, servingDrift, outlierBallots, integrityGrade, judgeGrade } from "./analytics.js";
 import { barChart, divergingChart, histogram, radar } from "./charts.js";
 import { exportReportPDF } from "./report.js";
 
@@ -132,9 +132,9 @@ const ordinal = (n) => {
 };
 
 // Integrity grade badge (A–F) shown wherever result-integrity appears.
-function gradeBadge(ig) {
+function gradeBadge(ig, label = "Integrity") {
   if (!ig) return "";
-  return `<div class="grade g${ig.grade}"><span class="grade-l">${ig.grade}</span><span class="grade-m"><b>Integrity ${ig.score}/100</b><span>${esc(ig.meaning)}</span></span></div>`;
+  return `<div class="grade g${ig.grade}"><span class="grade-l">${ig.grade}</span><span class="grade-m"><b>${esc(label)} ${ig.score}/100</b><span>${esc(ig.meaning)}</span></span></div>`;
 }
 
 // Shared sub-navigation tabs for the Event Admin and Analytics hubs.
@@ -2478,6 +2478,7 @@ async function renderJudgesDB() {
         <div><b>${p.dishesScored ? p.consistency : "—"}</b><span>spread (σ)</span></div>
       </div>
       <div class="jdb-tags">${gTag}${cTag}</div>
+      ${gradeBadge(judgeGrade(p), "Overall")}
       <h4>Events judged</h4>
       <table class="dd-judges"><thead><tr><th>Event</th><th>Ballots</th><th>Avg</th><th>vs field</th></tr></thead><tbody>${track}</tbody></table>
       <h4>By criterion</h4>
@@ -2509,6 +2510,7 @@ async function renderJudgesDB() {
       <div class="rk-scroll"><table class="jdb-rank">
         <thead><tr><th class="rk-num">#</th><th class="rk-name">Judge</th>
           ${rankCols.map((col) => `<th data-k="${col.k}">${col.label}</th>`).join("")}
+          <th class="rk-g">Grade</th>
         </tr></thead><tbody></tbody></table></div>
     </div>`);
     const rankBody = $("tbody", rankWrap);
@@ -2531,6 +2533,7 @@ async function renderJudgesDB() {
               p.dishesScored ? (p.generosity > 0 ? "+" : "") + p.generosity : "—"
             }</td>
             <td>${p.dishesScored ? p.consistency : "—"}</td>
+            <td class="rk-g">${(() => { const g = judgeGrade(p); return g ? `<span class="gchip g${g.grade}" title="${g.score}/100 — ${esc(g.meaning)}">${g.grade}</span>` : "—"; })()}</td>
           </tr>`);
           tr.onclick = () => showJudge(p);
           return tr;
