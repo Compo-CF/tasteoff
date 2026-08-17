@@ -587,13 +587,12 @@ export function integrityGrade(event, scores, pre) {
   // Clean ballots (0–25): outliers per dish; ~0.8/dish is where it bottoms out.
   const clean = clamp(1 - (outs.length / Math.max(1, nTeams)) / 0.8) * 25;
   const score = Math.round(agreement + robustness + steadiness + clean);
-  const grade = score >= 85 ? "A" : score >= 72 ? "B" : score >= 58 ? "C" : score >= 45 ? "D" : "F";
+  const grade = score >= 80 ? "A" : score >= 73 ? "B" : score >= 60 ? "C" : "D";
   const meaning = {
     A: "rock-solid — strong consensus, robust & clean",
     B: "sound — a dependable result",
     C: "defensible — loosely-agreed or a little fragile",
-    D: "shaky — a couple of judges could reorder it",
-    F: "fragile — the ranking hinges on one or two ballots",
+    D: "weak — low panel consensus or a fragile result",
   }[grade];
   return { score, grade, meaning, parts: { agreement: Math.round(agreement), robustness: Math.round(robustness), steadiness: Math.round(steadiness), clean: Math.round(clean) }, pa, wr, dr, outs };
 }
