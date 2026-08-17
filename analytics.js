@@ -529,3 +529,37 @@ export function outlierBallots(criteria, teams, scores, threshold = 1.0) {
   });
   return out.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
 }
+
+// Composite integrity grade (A–F) from the four result-integrity signals.
+// Pass precomputed {pa,wr,dr,outs} to avoid recomputation where available.
+export function integrityGrade(event, scores, pre) {
+  const teams = event.teams || [];
+  const pa = (pre && pre.pa) || panelAgreement(event.criteria, teams, scores);
+  const wr = (pre && pre.wr) || winnerRobustness(event, scores);
+  const dr = (pre && pre.dr) || servingDrift(event.criteria, teams, scores);
+  const outs = (pre && pre.outs) || outlierBallots(event.criteria, teams, scores);
+  if (!wr) return null; // no scored result to grade
+  const clamp = (x) => Math.max(0, Math.min(1, x));
+  const nTeams = teams.length || 1;
+  const jc = wr.judgeCount || 1;
+  const rAgree = pa.r == null ? 0.3 : pa.r;                    // neutral if no overlap
+  // Panel consensus (0–30): food judging runs ~0.3, so r≈0.4 is already strong.
+  const agreement = clamp((rAgree + 0.10) / 0.50) * 30;
+  // Decisiveness (0–25): mostly the margin; a stable win (or few pivotal judges)
+  // adds up to 10. A close race in a big field isn't a data flaw, so it's gentle.
+  const decisiveness = clamp(wr.marginPct / 5) * 15 + (wr.stable ? 10 : clamp(1 - wr.pivotal.length / jc) * 10);
+  // Serving steadiness (0–20): penalize real palate drift.
+  const steadiness = dr ? clamp(1 - Math.abs(dr.slope) / 0.10) * 20 : 15;
+  // Clean ballots (0–25): outliers per dish; ~0.8/dish is where it bottoms out.
+  const clean = clamp(1 - (outs.length / Math.max(1, nTeams)) / 0.8) * 25;
+  const score = Math.round(agreement + decisiveness + steadiness + clean);
+  const grade = score >= 85 ? "A" : score >= 72 ? "B" : score >= 58 ? "C" : score >= 45 ? "D" : "F";
+  const meaning = {
+    A: "rock-solid — strong consensus, decisive & clean",
+    B: "sound — a dependable result",
+    C: "defensible, but a close or loosely-agreed call",
+    D: "shaky — the result hinged on a few ballots",
+    F: "fragile — treat the ranking with caution",
+  }[grade];
+  return { score, grade, meaning, parts: { agreement: Math.round(agreement), decisiveness: Math.round(decisiveness), steadiness: Math.round(steadiness), clean: Math.round(clean) }, pa, wr, dr, outs };
+}

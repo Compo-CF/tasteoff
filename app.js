@@ -21,7 +21,7 @@ import {
 import { BUILTIN_TEMPLATES, templateCriteria } from "./templates.js";
 import { computeLeaderboards, SCORE_STEPS } from "./scoring.js";
 import { parseFile, parseGoogleSheet, workbookToTemplates } from "./import-sheet.js";
-import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles, eventsOverview, restaurantHistory, participantProfile, explainWinner, panelAgreement, winnerRobustness, servingDrift, outlierBallots } from "./analytics.js";
+import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles, eventsOverview, restaurantHistory, participantProfile, explainWinner, panelAgreement, winnerRobustness, servingDrift, outlierBallots, integrityGrade } from "./analytics.js";
 import { barChart, divergingChart, histogram, radar } from "./charts.js";
 import { exportReportPDF } from "./report.js";
 
@@ -130,6 +130,12 @@ const ordinal = (n) => {
   const s = ["th", "st", "nd", "rd"], v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 };
+
+// Integrity grade badge (A–F) shown wherever result-integrity appears.
+function gradeBadge(ig) {
+  if (!ig) return "";
+  return `<div class="grade g${ig.grade}"><span class="grade-l">${ig.grade}</span><span class="grade-m"><b>Integrity ${ig.score}/100</b><span>${esc(ig.meaning)}</span></span></div>`;
+}
 
 // Shared sub-navigation tabs for the Event Admin and Analytics hubs.
 function hubTabs(kind, active) {
@@ -2088,11 +2094,13 @@ function renderAnalytics(ev, scores, reveal) {
   const wr = winnerRobustness(ev, scores);
   const dr = servingDrift(ev.criteria, ev.teams, scores);
   const outs = outlierBallots(ev.criteria, ev.teams, scores);
+  const ig = integrityGrade(ev, scores, { pa, wr, dr, outs });
   const jn = (jid, fallback) => judgeName[jid] || fallback || jid; // judge names aren't blind
   const dishLbl = (code, name) => (reveal ? (name || "#" + code) : "Team #" + code);
   const integ = `<div class="acard integ">
     <h4>Result integrity</h4>
     <p class="asub">How much the panel agreed, how decisive the win was, and any scoring quirks.</p>
+    ${gradeBadge(ig)}
     <div class="integ-grid">
       <div class="integ-item"><span class="integ-k">Panel agreement</span><b>${pa.r == null ? "—" : pa.r}</b><span class="integ-v">${esc(pa.label)}${pa.pairs ? ` · ${pa.pairs} pairs` : ""}</span></div>
       <div class="integ-item"><span class="integ-k">Winner margin</span><b>${wr ? wr.margin : "—"}</b><span class="integ-v">${wr ? `${wr.marginPct}% over 2nd${wr.tieBroken ? " · tiebroken" : ""}` : ""}</span></div>
@@ -2766,30 +2774,36 @@ async function renderHistory(mode) {
       series === "__all__" ? "" : ` — <b>${esc(series)}</b> only`
     }. <a href="#/judges">Judge database →</a>`;
     if (tab === "events") {
+      const gradeByName = {};
+      evs.forEach((e) => { const g = integrityGrade(e, scoresByEvent[e.id] || []); if (g) gradeByName[e.name] = g; });
       const rows = overview
         .map(
-          (e) => `<tr class="clickrow" data-name="${esc(e.name)}">
+          (e) => {
+            const g = gradeByName[e.name];
+            return `<tr class="clickrow" data-name="${esc(e.name)}">
             <td>${esc(e.name)}</td>
             <td class="tb">${e.teams}</td>
             <td class="tb">${e.judges}</td>
             <td class="tb">${e.ballots}</td>
             <td class="sc">${e.fieldAvg}</td>
+            <td class="tb">${g ? `<span class="gchip g${g.grade}" title="Integrity ${g.score}/100 — ${esc(g.meaning)}">${g.grade}</span>` : "—"}</td>
             <td>🏆 ${esc(e.winner)}${
               e.publishedWinner && esc(e.publishedWinner) !== esc(e.winner)
                 ? `<div class="pubwin">published: ${esc(e.publishedWinner)}</div>`
                 : ""
             }</td>
-          </tr>`
+          </tr>`;
+          }
         )
         .join("");
       const node = el(`<div>
         <div class="scoreblurb">
-          <b>How events are scored.</b> Judges rate every dish <b>1–5</b> on each weighted criterion. <b>Field avg</b> is the plain average of all those 1–5 ratings across the whole event — a quick read on how tough or generous the panel was overall. The <b>Winner</b> is decided by the event's <em>official method</em>: <b>Scaled</b> (every judge's weighted scores summed) or <b>Min-Max</b> (same, but each dish's single highest and lowest judge scores are dropped first).
+          <b>How events are scored.</b> Judges rate every dish <b>1–5</b> on each weighted criterion. <b>Field avg</b> is the plain average of all those 1–5 ratings across the whole event. <b>Grade</b> is the result-integrity grade (A–F) — how much the panel agreed, how decisive the win was, and how clean the scoring was. The <b>Winner</b> is decided by the event's <em>official method</em>: <b>Scaled</b> or <b>Min-Max</b> (drops each dish's high &amp; low first). Tap an event for the full breakdown.
         </div>
         <div class="board"><table>
-          <thead><tr><th>Event</th><th>Teams</th><th>Judges</th><th>Ballots</th><th>Field avg</th><th>Winner</th></tr></thead>
+          <thead><tr><th>Event</th><th>Teams</th><th>Judges</th><th>Ballots</th><th>Field avg</th><th>Grade</th><th>Winner</th></tr></thead>
           <tbody>${rows}</tbody></table></div>
-          <p class="tienote">Tap an event to see why the winner won.</p>
+          <p class="tienote">Tap an event to see why the winner won + the integrity breakdown.</p>
         </div>`);
       node.querySelectorAll(".clickrow").forEach((tr) => (tr.onclick = () => showWinner(idByName[tr.dataset.name])));
       host.replaceChildren(node);
@@ -2861,9 +2875,11 @@ async function renderHistory(mode) {
     const wr = winnerRobustness(ev, scr);
     const dr = servingDrift(ev.criteria, ev.teams, scr);
     const outs = outlierBallots(ev.criteria, ev.teams, scr);
+    const ig = integrityGrade(ev, scr, { pa, wr, dr, outs });
     const jn = Object.fromEntries((ev.judges || []).map((j) => [j.id, j.name]));
     const jname = (jid, fb) => jn[jid] || fb || jid;
     const integ = `<h4>Result integrity</h4>
+      ${gradeBadge(ig)}
       <div class="integ-grid">
         <div class="integ-item"><span class="integ-k">Panel agreement</span><b>${pa.r == null ? "—" : pa.r}</b><span class="integ-v">${esc(pa.label)}</span></div>
         <div class="integ-item"><span class="integ-k">Winner margin</span><b>${wr ? wr.margin : "—"}</b><span class="integ-v">${wr ? `${wr.marginPct}% over 2nd${wr.tieBroken ? " · tiebroken" : ""}` : ""}</span></div>

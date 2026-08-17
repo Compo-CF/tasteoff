@@ -3,7 +3,7 @@
 // methodology). Uses the vendored jsPDF (window.jspdf) and draws charts on an
 // offscreen canvas. Pure: depends only on scoring/analytics helpers + jsPDF.
 import { computeLeaderboards } from "./scoring.js";
-import { eventAnalytics, dishAnalytics, panelAgreement, winnerRobustness, servingDrift, outlierBallots } from "./analytics.js";
+import { eventAnalytics, dishAnalytics, panelAgreement, winnerRobustness, servingDrift, outlierBallots, integrityGrade } from "./analytics.js";
 
 const RPT = {
   brick: "#B5361F", ember: "#E08A2C", gold: "#F0B44E", goldm: "#EBA93C",
@@ -390,8 +390,12 @@ export async function buildReportDoc(ev, scores, peoples, aw) {
   const wr = winnerRobustness(ev, scores);
   const drift = servingDrift(criteria, teams, scores);
   const outs = outlierBallots(criteria, teams, scores);
+  const ig = integrityGrade(ev, scores, { pa, wr, dr: drift, outs });
   y += 8;
-  setF("bold", 12.5); setC(RPT.ink); T("Result integrity", M, y); y += 15;
+  setF("bold", 12.5); setC(RPT.ink); T("Result integrity", M, y);
+  if (ig) { setF("bold", 12.5); setC(RPT.brick); T(`Grade ${ig.grade}  ·  ${ig.score}/100`, M + U, y, { align: "right" }); }
+  y += 15;
+  if (ig) y = para(`Grade ${ig.grade} — ${ig.meaning}.`, y, 8.8, RPT.brick);
   const integ = [
     `Panel agreement: ${pa.r == null ? "—" : pa.r} (${pa.label}${pa.pairs ? ", " + pa.pairs + " judge pairs" : ""}).`,
     wr ? `Winner margin: ${wr.margin} pts (${wr.marginPct}% over 2nd${wr.tieBroken ? ", tiebroken" : ""}).` : "",
