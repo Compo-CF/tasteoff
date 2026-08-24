@@ -147,6 +147,28 @@ function compressImage(file, maxDim = 1100, quality = 0.72) {
   });
 }
 
+// iOS home-screen (standalone) PWAs can't open a print dialog — window.print()
+// is a silent no-op there. Bounce to Safari, where printing works; window.print()
+// is fine everywhere else (mobile Safari in-browser, Android, desktop).
+function printPage() {
+  const standalone =
+    window.navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+  const iOS =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (standalone && iOS) {
+    const w = window.open(location.href, "_blank");
+    if (!w) {
+      alert(
+        "To print from the home-screen app, open this page in Safari first: tap the Share button, choose “Open in Safari”, then tap Print."
+      );
+    }
+    return;
+  }
+  window.print();
+}
+
 const ordinal = (n) => {
   const s = ["th", "st", "nd", "rd"], v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
@@ -2695,7 +2717,7 @@ async function renderRunner() {
     <table class="runner-table"><thead><tr><th>Pickup time</th><th>Dish #</th><th>Pick up from</th>${anyTable ? "<th>Deliver to</th>" : ""}<th>Dish</th></tr></thead>
       <tbody>${rows}</tbody></table>
   </div>`);
-  $("#print", c).onclick = () => window.print();
+  $("#print", c).onclick = printPage;
   app().replaceChildren(c);
 }
 
@@ -2838,7 +2860,7 @@ async function renderInstructions() {
     <p class="sub noprint">One instruction sheet per participant — print and hand out. Each shows their dish, entry time, portion count (judges + 1) and the blind-judging rules.</p>
     ${teams.length ? cards : `<p class="empty">No participants yet — add teams in Set up event.</p>`}
   </div>`);
-  $("#print", c).onclick = () => window.print();
+  $("#print", c).onclick = printPage;
   app().replaceChildren(c);
 }
 
@@ -2898,7 +2920,7 @@ async function renderJudgeCard() {
   </div>`);
   app().replaceChildren(c);
   judges.forEach((j, i) => makeQR($("#jcqr" + i, c), jUrl(j)));
-  $("#print", c).onclick = () => window.print();
+  $("#print", c).onclick = printPage;
 }
 
 // ---------- HISTORICAL ANALYSIS ----------
