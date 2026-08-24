@@ -606,13 +606,129 @@ export function judgeGrade(p) {
   const consistency = clamp(1 - Math.abs((p.consistency || 0) - 0.8) / 0.7) * 35; // 0–35, σ≈0.8 ideal
   const experience = clamp(p.dishesScored / 50) * 15 + clamp(p.eventsJudged / 3) * 10; // 0–25
   const score = Math.round(calibration + consistency + experience);
-  const grade = score >= 85 ? "A" : score >= 72 ? "B" : score >= 58 ? "C" : score >= 45 ? "D" : "F";
+  const grade = score >= 80 ? "A" : score >= 73 ? "B" : score >= 60 ? "C" : "D"; // same bands as events
   const meaning = {
     A: "elite — experienced, fair & consistent",
     B: "strong, dependable judge",
     C: "solid contributor",
     D: "developing — thin record or off-calibration",
-    F: "erratic or heavily skewed scorer",
   }[grade];
   return { score, grade, meaning, parts: { calibration: Math.round(calibration), consistency: Math.round(consistency), experience: Math.round(experience) } };
+}
+
+// Method sensitivity: which dishes rank differently under Scaled vs Min-Max
+// (i.e., where trimming each dish's high & low actually changed the order),
+// and whether the two methods crown a different winner.
+export function methodDisagreement(event, scores) {
+  const { scaled, minmax } = computeLeaderboards(event.criteria || [], event.teams || [], scores || []);
+  if (!scaled.length) return null;
+  const mmPlace = Object.fromEntries(minmax.map((r) => [r.code, r.place]));
+  const rows = scaled
+    .filter((r) => r.place && mmPlace[r.code])
+    .map((r) => ({ code: r.code, name: r.name, scaledPlace: r.place, minmaxPlace: mmPlace[r.code], delta: mmPlace[r.code] - r.place }))
+    .filter((r) => r.delta !== 0)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  const wS = scaled.find((r) => r.place === 1);
+  const wM = minmax.find((r) => r.place === 1);
+  return {
+    rows,
+    moved: rows.length,
+    total: scaled.filter((r) => r.place).length,
+    winnerScaled: wS ? wS.name || wS.code : null,
+    winnerMinmax: wM ? wM.name || wM.code : null,
+    winnerDiffers: !!(wS && wM && wS.code !== wM.code),
+  };
+}
+
+// Spearman rank correlation (ties get average ranks).
+function rankArr(vals) {
+  const idx = vals.map((v, i) => [v, i]).sort((a, b) => a[0] - b[0]);
+  const r = new Array(vals.length);
+  let i = 0;
+  while (i < idx.length) {
+    let j = i;
+    while (j + 1 < idx.length && idx[j + 1][0] === idx[i][0]) j++;
+    const rk = (i + j) / 2 + 1;
+    for (let k = i; k <= j; k++) r[idx[k][1]] = rk;
+    i = j + 1;
+  }
+  return r;
+}
+function spearman(xs, ys) { return pearson(rankArr(xs), rankArr(ys)); }
+
+// Judge agreement: pairwise rank-correlation of judges' per-dish weighted totals
+// over dishes they both scored (>=5 shared). Returns the aligned/divergent pairs
+// plus each judge's average agreement with the rest of the panel.
+export function judgeAgreement(events, scoresByEvent) {
+  const wOf = {};
+  const nameOf = {};
+  const byJudge = {}; // jid -> { "evId:teamCode": weightedTotal }
+  events.forEach((ev) => {
+    wOf[ev.id] = Object.fromEntries((ev.criteria || []).map((c) => [c.id, +c.weight || 0]));
+    (ev.judges || []).forEach((j) => { if (j.name) nameOf[j.id] = j.name; });
+    (scoresByEvent[ev.id] || []).forEach((s) => {
+      const cs = s.criterionScores || {};
+      let tot = 0, any = false;
+      for (const cid in cs) { const v = cs[cid]; if (typeof v === "number" && v > 0) { tot += (wOf[ev.id][cid] || 0) * v; any = true; } }
+      if (any) { (byJudge[s.judgeId] = byJudge[s.judgeId] || {})[ev.id + ":" + s.teamCode] = tot; if (!nameOf[s.judgeId] && s.judgeName) nameOf[s.judgeId] = s.judgeName; }
+    });
+  });
+  const jids = Object.keys(byJudge);
+  const pairs = [];
+  const acc = Object.fromEntries(jids.map((id) => [id, []]));
+  for (let a = 0; a < jids.length; a++) {
+    for (let b = a + 1; b < jids.length; b++) {
+      const A = byJudge[jids[a]], B = byJudge[jids[b]];
+      const common = Object.keys(A).filter((k) => k in B);
+      if (common.length < 5) continue;
+      const r = round2(spearman(common.map((k) => A[k]), common.map((k) => B[k])));
+      pairs.push({ a: jids[a], b: jids[b], aName: nameOf[jids[a]] || jids[a], bName: nameOf[jids[b]] || jids[b], r, common: common.length });
+      acc[jids[a]].push(r); acc[jids[b]].push(r);
+    }
+  }
+  const perJudge = jids
+    .map((id) => ({ id, name: nameOf[id] || id, avgR: acc[id].length ? round2(mean(acc[id])) : null, partners: acc[id].length }))
+    .filter((p) => p.avgR != null)
+    .sort((a, b) => a.avgR - b.avgR); // most independent first
+  pairs.sort((a, b) => b.r - a.r);
+  return { pairs, perJudge };
+}
+
+// Head-to-head: events where two participants both competed, and who placed higher.
+export function participantMatchups(events, scoresByEvent, nameA, nameB) {
+  const la = String(nameA || "").toLowerCase(), lb = String(nameB || "").toLowerCase();
+  const meetings = [];
+  let aWins = 0, bWins = 0;
+  events.forEach((ev) => {
+    const ranked = officialRanked(ev, scoresByEvent[ev.id] || []);
+    const A = ranked.find((r) => String(r.name || "").toLowerCase() === la && r.place);
+    const B = ranked.find((r) => String(r.name || "").toLowerCase() === lb && r.place);
+    if (A && B) {
+      const aWon = A.place < B.place;
+      if (aWon) aWins++; else bWins++;
+      meetings.push({ event: ev.name || ev.id, aPlace: A.place, bPlace: B.place, field: ranked.filter((r) => r.place).length, aWon });
+    }
+  });
+  return { meetings, aWins, bWins };
+}
+
+// Strength of field per event: field average + depth (how good you had to be to
+// podium) — lets a win in a deep field read stronger than one in a small field.
+export function strengthOfField(events, scoresByEvent) {
+  return events.map((ev) => {
+    const scores = scoresByEvent[ev.id] || [];
+    const ranked = officialRanked(ev, scores);
+    const method = methodOf(ev);
+    const placed = ranked.filter((r) => r.place);
+    const vals = placed.map((r) => officialVal(r, method));
+    const flat = flatten(scores).map((f) => f.value);
+    const top3 = vals.slice(0, 3);
+    return {
+      id: ev.id, name: ev.name || ev.id,
+      teams: placed.length,
+      fieldAvg: round2(mean(flat)),
+      podiumAvg: round2(mean(top3)),      // avg official score of the top 3
+      spread: round2(stdev(vals)),         // how spread out the field was
+    };
+  });
 }

@@ -641,3 +641,19 @@ input, select {
 .gC .grade-l, .gchip.gC { background: #d9a021; }
 .gD .grade-l, .gchip.gD { background: #dd7a2e; }
 .gF .grade-l, .gchip.gF { background: #c0392b; }
+
+/* ---------- more analytics (method / agreement / head-to-head) ---------- */
+.warnline { color: var(--warn); font-weight: 600; }
+.agr-card { margin-top: 16px; }
+.agr-cols { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 640px) { .agr-cols { grid-template-columns: repeat(3, 1fr); } }
+.agr-cols h4 { margin: 0 0 6px; font-size: 13px; }
+.agr-list { margin: 0; padding-left: 18px; font-size: 13px; }
+.agr-list li { margin-bottom: 4px; }
+.agr-r { display: inline-block; min-width: 34px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.h2h { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); margin-bottom: 16px; border-left: 5px solid #7a4fa3; }
+.h2h h3 { margin: 0 0 10px; font-size: 16px; }
+.h2h-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.h2h-controls select { font-size: 14px; max-width: 44%; }
+.h2h-vs { color: var(--muted); font-weight: 700; }
+.h2h-score { font-size: 16px; margin: 12px 0 8px; }

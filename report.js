@@ -3,7 +3,7 @@
 // methodology). Uses the vendored jsPDF (window.jspdf) and draws charts on an
 // offscreen canvas. Pure: depends only on scoring/analytics helpers + jsPDF.
 import { computeLeaderboards } from "./scoring.js";
-import { eventAnalytics, dishAnalytics, panelAgreement, winnerRobustness, servingDrift, outlierBallots, integrityGrade } from "./analytics.js";
+import { eventAnalytics, dishAnalytics, panelAgreement, winnerRobustness, servingDrift, outlierBallots, integrityGrade, methodDisagreement } from "./analytics.js";
 
 const RPT = {
   brick: "#B5361F", ember: "#E08A2C", gold: "#F0B44E", goldm: "#EBA93C",
@@ -406,6 +406,10 @@ export async function buildReportDoc(ev, scores, peoples, aw) {
   y = para(outs.length
     ? "Outlier ballots (1.0+ off consensus): " + outs.slice(0, 4).map((o) => `${nameOf[o.judgeId] || o.judgeName || o.judgeId} on ${o.dish || "#" + o.code} (${o.delta > 0 ? "+" : ""}${o.delta})`).join("; ") + "."
     : "No outlier ballots — every judge scored within 1.0 of each dish's consensus.", y, 8.4, RPT.muted);
+  const md = methodDisagreement(ev, scores);
+  if (md) y = para(md.winnerDiffers
+    ? `Method sensitivity: Scaled and Min-Max crown different winners (Scaled: ${md.winnerScaled}, Min-Max: ${md.winnerMinmax}) — the official ${PN} method decides.`
+    : `Method sensitivity: ${md.moved} of ${md.total} dishes rank differently under Scaled vs Min-Max; the winner is the same either way.`, y, 8.4, RPT.muted);
   y += 6;
   if (y > PH - 150) y = newPage();
   setF("bold", 12.5); setC(RPT.ink); T("How scoring works", M, y); y += 16;

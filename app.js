@@ -21,7 +21,7 @@ import {
 import { BUILTIN_TEMPLATES, templateCriteria } from "./templates.js";
 import { computeLeaderboards, SCORE_STEPS } from "./scoring.js";
 import { parseFile, parseGoogleSheet, workbookToTemplates } from "./import-sheet.js";
-import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles, eventsOverview, restaurantHistory, participantProfile, explainWinner, panelAgreement, winnerRobustness, servingDrift, outlierBallots, integrityGrade, judgeGrade } from "./analytics.js";
+import { eventAnalytics, dishFacets, dishAnalytics, criterionInfluence, judgeProfiles, eventsOverview, restaurantHistory, participantProfile, explainWinner, panelAgreement, winnerRobustness, servingDrift, outlierBallots, integrityGrade, judgeGrade, methodDisagreement, judgeAgreement, participantMatchups, strengthOfField } from "./analytics.js";
 import { barChart, divergingChart, histogram, radar } from "./charts.js";
 import { exportReportPDF } from "./report.js";
 
@@ -2108,8 +2108,14 @@ function renderAnalytics(ev, scores, reveal) {
   const dr = servingDrift(ev.criteria, ev.teams, scores);
   const outs = outlierBallots(ev.criteria, ev.teams, scores);
   const ig = integrityGrade(ev, scores, { pa, wr, dr, outs });
+  const md = methodDisagreement(ev, scores);
   const jn = (jid, fallback) => judgeName[jid] || fallback || jid; // judge names aren't blind
   const dishLbl = (code, name) => (reveal ? (name || "#" + code) : "Team #" + code);
+  const methodLine = md
+    ? (md.winnerDiffers
+        ? `<p class="hint warnline">⚠ The two methods crown different winners — Scaled: <b>${esc(reveal ? md.winnerScaled : "a dish")}</b>, Min-Max: <b>${esc(reveal ? md.winnerMinmax : "another")}</b>. The official method (${ev.officialMethod === "minmax" ? "Min-Max" : "Scaled"}) decides.</p>`
+        : `<p class="hint">Method sensitivity: ${md.moved} of ${md.total} dishes rank differently under Scaled vs Min-Max; the winner is the same either way.</p>`)
+    : "";
   const integ = `<div class="acard integ">
     <h4>Result integrity</h4>
     <p class="asub">How much the panel agreed, how decisive the win was, and any scoring quirks.</p>
@@ -2123,6 +2129,7 @@ function renderAnalytics(ev, scores, reveal) {
     ${outs.length
       ? `<div class="integ-out"><b>Outlier ballots</b> <span class="hint">a judge ≥1.0 off the dish's consensus</span><ul>${outs.slice(0, 6).map((o) => `<li>${esc(jn(o.judgeId, o.judgeName))} on ${esc(dishLbl(o.code, o.dish))}: <b>${o.judgeAvg}</b> vs ${o.consensus} (${o.delta > 0 ? "+" : ""}${o.delta})</li>`).join("")}</ul></div>`
       : `<p class="hint">No outlier ballots — every judge scored within 1.0 of each dish's consensus.</p>`}
+    ${methodLine}
   </div>`;
 
   const wrap = el(`<div class="analytics">
@@ -2568,7 +2575,24 @@ async function renderJudgesDB() {
     });
     drawRank();
 
-    host.replaceChildren(rankWrap);
+    // ---- Judge agreement (who scores alike / independently) ----
+    const agr = judgeAgreement(evs, scoresByEvent);
+    let agrCard = "";
+    if (agr.pairs.length) {
+      const aligned = agr.pairs.slice(0, 5);
+      const divergent = agr.pairs.slice(-5).reverse();
+      const indep = agr.perJudge.slice(0, 5); // lowest avg agreement
+      const pairLi = (p) => `<li><span class="agr-r">${p.r > 0 ? "+" : ""}${p.r}</span> ${esc(p.aName)} &amp; ${esc(p.bName)} <span class="hint">(${p.common} shared)</span></li>`;
+      agrCard = `<div class="jdb-rankwrap agr-card">
+        <div class="jdb-rankhead"><h3>Judge agreement</h3><span class="rk-note">rank-correlation of judges over dishes they both scored — +1 = identical taste, 0 = independent</span></div>
+        <div class="agr-cols">
+          <div><h4>Most aligned</h4><ol class="agr-list">${aligned.map(pairLi).join("")}</ol></div>
+          <div><h4>Most divergent</h4><ol class="agr-list">${divergent.map(pairLi).join("")}</ol></div>
+          <div><h4>Most independent voices</h4><ol class="agr-list">${indep.map((p) => `<li><span class="agr-r">${p.avgR > 0 ? "+" : ""}${p.avgR}</span> ${esc(p.name)} <span class="hint">avg vs panel</span></li>`).join("")}</ol></div>
+        </div>
+      </div>`;
+    }
+    host.replaceChildren(rankWrap, el(`<div>${agrCard}</div>`));
   }
 
   $("#jseries", c).onchange = (e) => { series = e.target.value; render(); };
@@ -2845,11 +2869,31 @@ async function renderHistory(mode) {
         <div class="scoreblurb">
           <b>How scoring works.</b> Every judge rates each dish <b>1–5</b> on each criterion. An event's winner is set by its <em>official method</em>: <b>Scaled</b> (all judges' scores, each criterion weighted) or <b>Min-Max</b> (same, but each dish's single highest and lowest judge scores are dropped first). Those totals live on their scale and aren't comparable between events. The <b>Avg (1–5)</b> column below sidesteps that — it's the plain average of every 1–5 rating a participant received, so it reads the same across all events regardless of method or weighting.
         </div>
+        <div class="h2h">
+          <h3>Head-to-head</h3>
+          <div class="h2h-controls">
+            <select id="h2hA">${psorted.map((r) => `<option>${esc(r.name)}</option>`).join("")}</select>
+            <span class="h2h-vs">vs</span>
+            <select id="h2hB">${psorted.map((r, i) => `<option${i === 1 ? " selected" : ""}>${esc(r.name)}</option>`).join("")}</select>
+            <button class="mini primary" id="h2hGo">Compare</button>
+          </div>
+          <div id="h2hResult"></div>
+        </div>
         <div class="board"><table>
           <thead><tr><th>#</th><th>Participant</th><th data-k="appearances">Events</th><th data-k="wins">Wins</th><th data-k="podiums">Top 3</th><th data-k="bestPlace">Best</th><th data-k="avgPlace">Avg place</th><th data-k="avgScore">Avg (1–5)</th></tr></thead>
           <tbody>${rows}</tbody></table></div>
-          <p class="tienote">Tap a column to sort · tap a participant for their profile · “Events” = events entered · “Avg (1–5)” = mean of every judge × criterion rating.</p>
+          <p class="tienote">All-time leaderboard · tap a column to sort · tap a participant for their profile &amp; year-by-year record.</p>
         </div>`);
+      const h2h = $("#h2hGo", node);
+      if (h2h) h2h.onclick = () => {
+        const a = $("#h2hA", node).value, b = $("#h2hB", node).value;
+        const out = $("#h2hResult", node);
+        if (a === b) { out.innerHTML = `<p class="hint">Pick two different participants.</p>`; return; }
+        const m = participantMatchups(currentEvents(), scoresByEvent, a, b);
+        if (!m.meetings.length) { out.innerHTML = `<p class="hint">${esc(a)} and ${esc(b)} have never competed in the same event.</p>`; return; }
+        out.innerHTML = `<p class="h2h-score">${esc(a)} <b>${m.aWins}</b> — <b>${m.bWins}</b> ${esc(b)} <span class="hint">· ${m.meetings.length} shared event(s)</span></p>
+          <table class="dd-judges"><thead><tr><th>Event</th><th>${esc(a)}</th><th>${esc(b)}</th><th>Edge</th></tr></thead><tbody>${m.meetings.map((x) => `<tr><td>${esc(x.event)}</td><td class="tb">${ordinal(x.aPlace)}/${x.field}</td><td class="tb">${ordinal(x.bPlace)}/${x.field}</td><td>${x.aWon ? esc(a) : esc(b)}</td></tr>`).join("")}</tbody></table>`;
+      };
       node.querySelectorAll("th[data-k]").forEach((th) => {
         if (th.dataset.k === pSortK) th.dataset.arrow = pSortDir < 0 ? " ▼" : " ▲";
         th.onclick = () => {
@@ -2902,7 +2946,8 @@ async function renderHistory(mode) {
         ${(() => { const rl = robustnessLabel(wr, (jid) => jname(jid)); return `<div class="integ-item"><span class="integ-k">Robustness</span><b class="${rl.cls}">${rl.tag}</b><span class="integ-v">${rl.detail}</span></div>`; })()}
         <div class="integ-item"><span class="integ-k">Serving drift</span><b>${dr ? (dr.slope > 0 ? "+" : "") + dr.slope : "—"}</b><span class="integ-v">${dr ? esc(dr.direction) : "not enough data"}</span></div>
       </div>
-      ${outs.length ? `<p class="hint">Outlier ballots: ${outs.slice(0, 4).map((o) => esc(jname(o.judgeId, o.judgeName)) + " on " + esc(o.dish || "#" + o.code) + " (" + (o.delta > 0 ? "+" : "") + o.delta + ")").join("; ")}</p>` : `<p class="hint">No outlier ballots — every judge scored within 1.0 of each dish's consensus.</p>`}`;
+      ${outs.length ? `<p class="hint">Outlier ballots: ${outs.slice(0, 4).map((o) => esc(jname(o.judgeId, o.judgeName)) + " on " + esc(o.dish || "#" + o.code) + " (" + (o.delta > 0 ? "+" : "") + o.delta + ")").join("; ")}</p>` : `<p class="hint">No outlier ballots — every judge scored within 1.0 of each dish's consensus.</p>`}
+      ${(() => { const md = methodDisagreement(ev, scr); return !md ? "" : md.winnerDiffers ? `<p class="hint warnline">⚠ Scaled & Min-Max crown different winners (Scaled: <b>${esc(md.winnerScaled)}</b>, Min-Max: <b>${esc(md.winnerMinmax)}</b>). Official method: ${w.method}.</p>` : `<p class="hint">Method sensitivity: ${md.moved} of ${md.total} dishes shift between Scaled &amp; Min-Max; same winner either way.</p>`; })()}`;
     const ov = el(`<div class="modal-ov"><div class="modal wide">
       <div class="dd-head"><h3>🏆 ${esc(w.winner)}</h3><div class="dd-acts"><button class="mini primary" id="wPdf">⬇ PDF report</button><button class="mini" id="wClose">close</button></div></div>
       <p class="sub">${esc(ev.name)} · winner (${esc(w.method)})</p>
@@ -2920,8 +2965,9 @@ async function renderHistory(mode) {
 
   function showParticipant(name) {
     const p = participantProfile(currentEvents(), scoresByEvent, name);
+    const sof = Object.fromEntries(strengthOfField(currentEvents(), scoresByEvent).map((s) => [s.name, s]));
     const track = p.appearances
-      .map((a) => `<tr><td>${esc(a.event)}</td><td class="tb">${a.place ? ordinal(a.place) + " / " + a.field : "–"}</td><td class="sc">${a.score}</td></tr>`)
+      .map((a) => { const s = sof[a.event]; return `<tr><td>${esc(a.event)}</td><td class="tb">${a.place ? ordinal(a.place) + " / " + a.field : "–"}</td><td class="sc">${a.score}</td><td class="sc" title="how strong the field was">${s ? s.fieldAvg : "–"}</td></tr>`; })
       .join("");
     const aff = p.affinity;
     const favor = aff.slice(0, 3).filter((a) => a.delta > 0.15);
@@ -2932,8 +2978,8 @@ async function renderHistory(mode) {
       <div class="dd-head"><h3>${esc(name)}</h3><button class="mini" id="pClose">close</button></div>
       <p class="sub">${p.appearances.length} event(s) · best facet <b>${p.best ? esc(p.best.short) : "–"}</b>${p.worst && p.worst !== p.best ? ` · weakest <b>${esc(p.worst.short)}</b>` : ""}</p>
       <div class="dd-cols"><div class="dd-radar">${rdr}</div><div class="dd-bars">${facetBars}</div></div>
-      <h4>Track record</h4>
-      <table class="dd-judges"><thead><tr><th>Event</th><th>Finish</th><th>Score</th></tr></thead><tbody>${track}</tbody></table>
+      <h4>Track record <span class="hint">(year by year)</span></h4>
+      <table class="dd-judges"><thead><tr><th>Event</th><th>Finish</th><th>Score</th><th>Field avg</th></tr></thead><tbody>${track}</tbody></table>
       <h4>Judge affinity</h4>
       <p class="hint">${favor.length ? "Scored highest by: " + favor.map((a) => `${esc(a.judge)} (+${a.delta})`).join(", ") : "No strong high-scorers."}${tough.length ? " · Toughest: " + tough.map((a) => `${esc(a.judge)} (${a.delta})`).join(", ") : ""}</p>
     </div></div>`);
