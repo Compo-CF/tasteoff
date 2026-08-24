@@ -2733,6 +2733,7 @@ async function renderPhotos() {
     const pic = photos[code];
     const div = el(`<div class="ph-tile" data-code="${esc(code)}">
       <div class="ph-meta"><span class="ph-num">${t.dishNumber != null ? "#" + t.dishNumber : ""}</span><span class="ph-name">${esc(t.name || "—")}</span></div>
+      ${t.dishDescription ? `<div class="ph-dish">${esc(t.dishDescription)}</div>` : ""}
       <div class="ph-imgwrap">${pic ? `<img class="ph-img" src="${pic}" alt="dish photo">` : `<div class="ph-empty">📷</div>`}</div>
       <div class="ph-acts">
         <label class="mini primary ph-addlbl">${pic ? "Replace" : "Add photo"}<input type="file" accept="image/*" capture="environment" class="ph-in" hidden></label>
