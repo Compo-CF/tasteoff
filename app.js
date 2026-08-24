@@ -244,6 +244,7 @@ async function render() {
   if (path === "/history") return renderHistory("events");
   if (path === "/participants") return renderHistory("restaurants");
   if (path === "/runner") return renderRunner();
+  if (path === "/photos") return renderPhotos();
   if (path === "/instructions") return renderInstructions();
   if (path === "/judgecard") return renderJudgeCard();
   if (path === "/checklist") return requireCode("admin", renderChecklist);
@@ -1599,6 +1600,12 @@ function showLinks(ev, box) {
       runurl
     )}" onclick="this.select()"><a class="mini" href="#/runner?event=${encodeURIComponent(ev.id)}">Open &amp; print →</a></div>`)
   );
+  const photourl = `${base}#/photos?event=${encodeURIComponent(ev.id)}`;
+  box.appendChild(
+    el(`<div class="linkcard"><h4>Dish photos</h4><input readonly value="${esc(
+      photourl
+    )}" onclick="this.select()"><a class="mini" href="#/photos?event=${encodeURIComponent(ev.id)}">Open capture screen →</a></div>`)
+  );
   const insturl = `${base}#/instructions?event=${encodeURIComponent(ev.id)}`;
   box.appendChild(
     el(`<div class="linkcard"><h4>Participant instructions</h4><input readonly value="${esc(
@@ -1887,7 +1894,7 @@ async function renderResults() {
   const c = el(`<div class="wrap results"></div>`);
   c.appendChild(el(`<div class="jbar"><a class="back" href="#/menu">←</a><div class="who">${esc(
     ev.name || "Results"
-  )}</div><a class="mini" href="#/runner?event=${encodeURIComponent(ev.id)}">Runner sheet</a><a class="mini" href="#/instructions?event=${encodeURIComponent(ev.id)}">Participant instructions</a><button class="mini primary" id="pdf">⬇ Report (PDF)</button><button class="mini" id="xlsx">Excel</button><button class="mini" id="csv">CSV</button></div>`));
+  )}</div><a class="mini" href="#/runner?event=${encodeURIComponent(ev.id)}">Runner sheet</a><a class="mini" href="#/photos?event=${encodeURIComponent(ev.id)}">📷 Dish photos</a><a class="mini" href="#/instructions?event=${encodeURIComponent(ev.id)}">Participant instructions</a><button class="mini primary" id="pdf">⬇ Report (PDF)</button><button class="mini" id="xlsx">Excel</button><button class="mini" id="csv">CSV</button></div>`));
   const aw = eventAwards(ev);
   const pcTab = aw.peoples.enabled
     ? `<button class="tab" data-tab="peoples">People's Choice</button>`
@@ -2690,6 +2697,91 @@ async function renderRunner() {
   </div>`);
   $("#print", c).onclick = () => window.print();
   app().replaceChildren(c);
+}
+
+// ---------- DISH PHOTOS (dedicated capture screen — grid of all dishes) ----------
+async function renderPhotos() {
+  const myToken = renderToken;
+  const eventId = LS.activeEvent();
+  const ev = await loadEvent(eventId);
+  if (isStale(myToken)) return;
+  if (!ev) {
+    app().replaceChildren(el(`<div class="wrap"><a class="back" href="#/menu">← home</a><p class="empty">No event found.</p></div>`));
+    return;
+  }
+  if (ev.resultsPasscode && !resultsUnlocked) {
+    return gate("Results passcode", (val) => {
+      if (val === ev.resultsPasscode) { resultsUnlocked = true; renderPhotos(); } else alert("Wrong passcode.");
+    });
+  }
+  const teams = [...(ev.teams || [])].sort(
+    (a, b) => (a.dishNumber || 0) - (b.dishNumber || 0) || String(a.serveTime).localeCompare(String(b.serveTime))
+  );
+  const codeOf = (t) => t.code || t.id || t.name;
+  let photos = {};
+
+  const c = el(`<div class="wrap photos">
+    <div class="jbar"><a class="back" href="#/menu">←</a><div class="who">${esc(ev.name || "Dish photos")}</div>
+      <span class="ph-count" id="phCount"></span></div>
+    <h2 class="runner-h">Dish photos</h2>
+    <p class="sub">Snap or upload a photo for each dish as it comes in. Photos flow into the analytics dish view and the PDF report. Team names are shown here so you can match dishes — keep this screen away from judges.</p>
+    <div class="photos-grid" id="phGrid">${teams.length ? "" : `<p class="empty">No dishes yet — add teams in Set up event.</p>`}</div>
+  </div>`);
+
+  function tile(t) {
+    const code = codeOf(t);
+    const pic = photos[code];
+    const div = el(`<div class="ph-tile" data-code="${esc(code)}">
+      <div class="ph-meta"><span class="ph-num">${t.dishNumber != null ? "#" + t.dishNumber : ""}</span><span class="ph-name">${esc(t.name || "—")}</span></div>
+      <div class="ph-imgwrap">${pic ? `<img class="ph-img" src="${pic}" alt="dish photo">` : `<div class="ph-empty">📷</div>`}</div>
+      <div class="ph-acts">
+        <label class="mini primary ph-addlbl">${pic ? "Replace" : "Add photo"}<input type="file" accept="image/*" capture="environment" class="ph-in" hidden></label>
+        ${pic ? `<button class="mini ph-del">Remove</button>` : ""}
+      </div>
+    </div>`);
+    const inp = div.querySelector(".ph-in");
+    inp.onchange = async () => {
+      const f = inp.files && inp.files[0]; if (!f) return;
+      const lab = div.querySelector(".ph-addlbl"); const t0 = lab.firstChild.textContent; lab.firstChild.textContent = "Saving…";
+      try {
+        const url = await compressImage(f);
+        photos[code] = url;
+        await savePhoto(eventId, code, url);
+        redrawTile(t); updateCount();
+      } catch (e) { lab.firstChild.textContent = t0; alert("Couldn't save that image."); }
+    };
+    const del = div.querySelector(".ph-del");
+    if (del) del.onclick = async () => {
+      if (!confirm("Remove this dish photo?")) return;
+      delete photos[code];
+      try { await deletePhoto(eventId, code); } catch (e) {}
+      redrawTile(t); updateCount();
+    };
+    return div;
+  }
+  function redrawTile(t) {
+    const code = codeOf(t);
+    const sel = `.ph-tile[data-code="${(window.CSS && CSS.escape) ? CSS.escape(code) : code}"]`;
+    const old = c.querySelector(sel);
+    if (old) old.replaceWith(tile(t));
+  }
+  function updateCount() {
+    const n = teams.filter((t) => photos[codeOf(t)]).length;
+    const badge = $("#phCount", c);
+    if (badge) badge.textContent = teams.length ? `${n}/${teams.length} photographed` : "";
+  }
+
+  const grid = $("#phGrid", c);
+  teams.forEach((t) => grid.appendChild(tile(t)));
+  app().replaceChildren(c);
+  updateCount();
+
+  loadPhotos(eventId).then((p) => {
+    if (isStale(myToken)) return;
+    photos = p || {};
+    teams.forEach((t) => redrawTile(t));
+    updateCount();
+  });
 }
 
 // ---------- PARTICIPANT INSTRUCTIONS (printable, one card per team) ----------

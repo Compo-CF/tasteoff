@@ -664,3 +664,16 @@ input, select {
 .dd-nophoto { display: flex; align-items: center; justify-content: center; height: 140px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); font-size: 14px; background: var(--bg); }
 .dd-photoacts { display: flex; gap: 8px; margin-top: 8px; }
 .dd-photoacts label.mini { cursor: pointer; }
+
+/* ---------- DISH PHOTOS CAPTURE SCREEN ---------- */
+.photos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-top: 12px; }
+.ph-tile { border: 1px solid var(--line); border-radius: 14px; background: var(--card); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.ph-meta { display: flex; align-items: baseline; gap: 6px; }
+.ph-num { font-weight: 800; color: var(--brand); font-size: 13px; }
+.ph-name { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ph-imgwrap { aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden; background: var(--bg); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; }
+.ph-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ph-empty { font-size: 40px; opacity: 0.35; }
+.ph-acts { display: flex; gap: 8px; }
+.ph-acts .ph-addlbl { cursor: pointer; text-align: center; flex: 1; }
+.ph-count { font-size: 13px; color: var(--muted); font-weight: 600; margin-left: auto; }
