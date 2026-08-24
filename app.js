@@ -17,6 +17,9 @@ import {
   listTemplates,
   saveTemplate,
   deleteTemplate,
+  savePhoto,
+  loadPhotos,
+  deletePhoto,
 } from "./firebase.js";
 import { BUILTIN_TEMPLATES, templateCriteria } from "./templates.js";
 import { computeLeaderboards, SCORE_STEPS } from "./scoring.js";
@@ -124,6 +127,24 @@ function el(html) {
   const t = document.createElement("template");
   t.innerHTML = html.trim();
   return t.content.firstElementChild;
+}
+
+// Downscale + JPEG-compress an image File to a small data-URL (free-tier photos).
+function compressImage(file, maxDim = 1100, quality = 0.72) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.round(img.naturalWidth * s), h = Math.round(img.naturalHeight * s);
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      cv.getContext("2d").drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(img.src);
+      res(cv.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = rej;
+    img.src = URL.createObjectURL(file);
+  });
 }
 
 const ordinal = (n) => {
@@ -1897,6 +1918,16 @@ async function renderResults() {
 
   let latestScores = [];
   let latestPeoples = {};
+  let latestPhotos = {};
+  loadPhotos(eventId).then((p) => { latestPhotos = p || {}; if (tab === "analytics") draw(); });
+  const onSavePhoto = async (code, dataUrl) => {
+    latestPhotos = { ...latestPhotos, [code]: dataUrl };
+    try { await savePhoto(eventId, code, dataUrl); } catch (e) { alert("Couldn't save the photo — check your connection."); }
+  };
+  const onDeletePhoto = async (code) => {
+    const next = { ...latestPhotos }; delete next[code]; latestPhotos = next;
+    try { await deletePhoto(eventId, code); } catch (e) {}
+  };
   watchScores(eventId, (rows) => {
     latestScores = rows;
     draw();
@@ -1943,7 +1974,7 @@ async function renderResults() {
       host.replaceChildren(node);
       drawBoard();
     } else if (tab === "analytics") {
-      host.replaceChildren(renderAnalytics(ev, latestScores, reveal));
+      host.replaceChildren(renderAnalytics(ev, latestScores, reveal, latestPhotos, onSavePhoto, onDeletePhoto));
     } else if (tab === "peoples") {
       const node = renderPeoples(ev, latestPeoples, aw, reveal, (code, n) => {
         latestPeoples[code] = n;
@@ -1956,7 +1987,7 @@ async function renderResults() {
 
   $("#csv", c).onclick = () => exportCSV(ev, latestScores, latestPeoples, aw);
   $("#xlsx", c).onclick = () => exportXLSX(ev, latestScores, latestPeoples, aw);
-  $("#pdf", c).onclick = () => exportReportPDF(ev, latestScores, latestPeoples, aw);
+  $("#pdf", c).onclick = () => exportReportPDF(ev, latestScores, latestPeoples, aw, latestPhotos);
 }
 
 // Winners banner: Judges' Choice top N (both methods) + People's Choice top N.
@@ -2079,7 +2110,7 @@ function peoplesBoard(rows, aw, reveal) {
 }
 
 // Analytics tab content
-function renderAnalytics(ev, scores, reveal) {
+function renderAnalytics(ev, scores, reveal, photos = {}, onSavePhoto, onDeletePhoto) {
   if (!scores.length) return el(`<p class="empty">No scores yet — analytics appear as judges submit.</p>`);
   const a = eventAnalytics(ev.criteria, ev.teams, scores);
   const infl = criterionInfluence(ev.criteria, ev.teams, scores);
@@ -2189,6 +2220,11 @@ function renderAnalytics(ev, scores, reveal) {
       .join("");
     const vClass = d.verdict === "divisive" ? "divisive" : d.verdict === "strong consensus" ? "consensus" : "mid";
 
+    const pic = photos[code];
+    const photoBlock = `<div class="dd-photo">
+      ${pic ? `<img class="dd-photoimg" src="${pic}" alt="dish photo" loading="lazy">` : `<div class="dd-nophoto">📷 No photo yet</div>`}
+      ${onSavePhoto ? `<div class="dd-photoacts"><label class="mini">${pic ? "Replace photo" : "Add photo"}<input type="file" accept="image/*" class="dd-photoin" hidden></label>${pic ? `<button class="mini dd-photodel">Remove</button>` : ""}</div>` : ""}
+    </div>`;
     ddBody.replaceChildren(
       el(`<div class="dd-detail">
         <div class="dd-meta">
@@ -2196,6 +2232,7 @@ function renderAnalytics(ev, scores, reveal) {
           <span class="dd-verdict ${vClass}">${esc(d.verdict)} (σ ${d.judgeSpread})</span>
         </div>
         ${d.dishDescription ? `<p class="dd-desc">${esc(d.dishDescription)}</p>` : ""}
+        ${photoBlock}
         <div class="dd-cols">
           <div class="dd-radar">${rdr}</div>
           <div class="dd-bars">${facetBars}</div>
@@ -2206,6 +2243,18 @@ function renderAnalytics(ev, scores, reveal) {
         <table class="dd-judges"><thead><tr><th>Judge</th><th>avg</th><th>total</th></tr></thead><tbody>${judgeRows}</tbody></table>
       </div>`)
     );
+    const inp = ddBody.querySelector(".dd-photoin");
+    if (inp && onSavePhoto) inp.onchange = async () => {
+      const f = inp.files && inp.files[0]; if (!f) return;
+      const lab = inp.closest("label"); const t0 = lab.textContent; lab.firstChild.textContent = "Saving…";
+      try { const url = await compressImage(f); photos[code] = url; await onSavePhoto(code, url); drawDish(code); }
+      catch (e) { lab.firstChild.textContent = t0; alert("Couldn't process that image."); }
+    };
+    const del = ddBody.querySelector(".dd-photodel");
+    if (del && onDeletePhoto) del.onclick = async () => {
+      if (!confirm("Remove this dish photo?")) return;
+      delete photos[code]; await onDeletePhoto(code); drawDish(code);
+    };
   }
   sel.onchange = () => drawDish(sel.value);
   drawDish(winner ? winner.code : scored[0] && scored[0].code);
@@ -2958,7 +3007,7 @@ async function renderHistory(mode) {
       ${integ}
     </div></div>`);
     $("#wClose", ov).onclick = () => ov.remove();
-    $("#wPdf", ov).onclick = () => exportReportPDF(ev, scr, {}, eventAwards(ev));
+    $("#wPdf", ov).onclick = async () => { const ph = await loadPhotos(ev.id).catch(() => ({})); exportReportPDF(ev, scr, {}, eventAwards(ev), ph); };
     ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
     document.body.appendChild(ov);
   }

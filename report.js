@@ -131,12 +131,12 @@ function chPeoples(items, unit) {
     });
   });
 }
-export async function exportReportPDF(ev, scores, peoples, aw) {
-  const doc = await buildReportDoc(ev, scores, peoples, aw);
+export async function exportReportPDF(ev, scores, peoples, aw, photos) {
+  const doc = await buildReportDoc(ev, scores, peoples, aw, photos);
   if (doc) doc.save(`${ev.id || "event"}-results-report.pdf`);
 }
 // Builds and returns the jsPDF doc (no download) — exported for testing/preview.
-export async function buildReportDoc(ev, scores, peoples, aw) {
+export async function buildReportDoc(ev, scores, peoples, aw, photos = {}) {
   if (!window.jspdf || !window.jspdf.jsPDF) { alert("PDF library still loading — try again in a moment."); return null; }
   scores = scores || [];
   const criteria = ev.criteria || [], teams = ev.teams || [], judges = ev.judges || [];
@@ -416,6 +416,25 @@ export async function buildReportDoc(ev, scores, peoples, aw) {
   const wline = equalW ? `all ${criteria.length} criteria carried equal weight (${wpct(criteria[0])}% each)` : criteria.map((c) => `${c.name} ${wpct(c)}%`).join(", ");
   y = para(`Criteria & weights: ${wline}.`, y, 8.4, RPT.muted);
   y = para("Scaled total sums every judge's weighted 1–5 marks. Min-Max (trimmed) drops each dish's single highest and lowest mark before summing (when 3+ judges scored it), reducing the pull of one outlier ballot. Rankings are tie-free: exact ties break on the alternate method, then on count of top marks. All scoring is blind — judges see a code, never a team name.", y, 8.4, RPT.muted);
+
+  // ---------- PAGE: DISH PHOTOS (only if any exist) ----------
+  const withPhotos = rows.filter((r) => photos && photos[String(r.code)]);
+  if (withPhotos.length) {
+    y = newPage();
+    y = h1("Dish photos", y);
+    y = para("Snapshots captured during judging, in finish order.", y, 9.6);
+    const cols = 2, gap = 16, cw = (U - gap) / cols, ih = cw * 0.72;
+    for (let i = 0; i < withPhotos.length; i += cols) {
+      if (y + ih + 34 > PH - 52) y = newPage();
+      withPhotos.slice(i, i + cols).forEach((r, ci) => {
+        const x = M + ci * (cw + gap);
+        try { doc.addImage(photos[String(r.code)], "JPEG", x, y, cw, ih); } catch (e) {}
+        drawc(RPT.line); doc.setLineWidth(0.6); doc.rect(x, y, cw, ih);
+        setF("bold", 9.5); setC(RPT.ink); T(rclip(`${r.place ? r.place + ". " : ""}${r.name || "#" + r.code}`, 36), x, y + ih + 12);
+      });
+      y += ih + 26;
+    }
+  }
 
   return doc;
 }

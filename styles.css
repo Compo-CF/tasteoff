@@ -657,3 +657,10 @@ input, select {
 .h2h-controls select { font-size: 14px; max-width: 44%; }
 .h2h-vs { color: var(--muted); font-weight: 700; }
 .h2h-score { font-size: 16px; margin: 12px 0 8px; }
+
+/* ---------- DISH PHOTOS ---------- */
+.dd-photo { margin: 10px 0 4px; }
+.dd-photoimg { width: 100%; max-height: 320px; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); display: block; }
+.dd-nophoto { display: flex; align-items: center; justify-content: center; height: 140px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); font-size: 14px; background: var(--bg); }
+.dd-photoacts { display: flex; gap: 8px; margin-top: 8px; }
+.dd-photoacts label.mini { cursor: pointer; }

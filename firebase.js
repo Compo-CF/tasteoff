@@ -298,6 +298,30 @@ export async function getEventScoresOnce(eventId) {
   return rows;
 }
 
+// ---- Dish photos (compressed data-URLs stored per dish, free tier) ---------
+// events/{eventId}/photos/{teamCode} -> { photo: dataURL, updatedAt }
+export async function savePhoto(eventId, teamCode, dataUrl) {
+  await authReady;
+  await setDoc(doc(db, "events", eventId, "photos", String(teamCode)), { photo: dataUrl, updatedAt: serverTimestamp() });
+}
+export async function loadPhotos(eventId) {
+  try {
+    await withTimeout(authReady, 9000, null);
+    const snap = await withTimeout(getDocs(collection(db, "events", eventId, "photos")), 9000, null);
+    if (!snap) return {};
+    const out = {};
+    snap.forEach((d) => { out[d.id] = d.data().photo; });
+    return out;
+  } catch (err) {
+    console.warn("loadPhotos failed:", err?.code || err);
+    return {};
+  }
+}
+export async function deletePhoto(eventId, teamCode) {
+  await authReady;
+  await deleteDoc(doc(db, "events", eventId, "photos", String(teamCode)));
+}
+
 // Load every event (full config) + its scores — powers the judge database.
 export async function loadAllEventsWithScores() {
   const list = await listEvents();
