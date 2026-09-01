@@ -691,3 +691,23 @@ input, select {
 .ckrow.ready, .ckmark.ready { }
 .ckmark.ready { background: var(--brand); color: #fff; }
 .ckrow.ready { border-color: var(--line); }
+
+/* ---------- RUN EVENT (event-day console) ---------- */
+.runjudge { display: flex; align-items: center; gap: 14px; justify-content: space-between; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: var(--card); margin: 12px 0; }
+.runjudge.live { border-color: var(--brand-2); background: color-mix(in srgb, var(--brand-2) 8%, var(--card)); }
+.runjudge .rj-l { display: flex; align-items: center; gap: 12px; }
+.runjudge .ci { font-size: 26px; }
+.runjudge h3 { margin: 0; }
+.runjudge p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.rj-btn { border: 0; border-radius: 10px; padding: 12px 18px; font-weight: 700; font-size: 15px; cursor: pointer; background: var(--brand); color: #fff; white-space: nowrap; }
+.rj-btn.live { background: #b23b3b; }
+.runqrs { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin: 12px 0; }
+.runtools { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin: 8px 0 16px; }
+.runtool { display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: 14px; padding: 14px; background: var(--card); color: inherit; text-decoration: none; }
+.runtool:hover { border-color: var(--brand); }
+.runtool .ci { font-size: 24px; }
+.runtool .rt-t { flex: 1; }
+.runtool h4 { margin: 0; font-size: 15px; }
+.runtool p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
+.runtool .rt-go { color: var(--brand); font-weight: 700; font-size: 18px; }
+.reslink { display: inline-block; }

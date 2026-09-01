@@ -251,6 +251,7 @@ async function render() {
   if (path === "/judgecard") return renderJudgeCard();
   if (path === "/checklist") return requireCode("admin", renderChecklist);
   if (path === "/wrapup") return requireCode("admin", renderWrapup);
+  if (path === "/run") return requireCode("admin", renderRunEvent);
   if (path === "/events") return requireCode("admin", renderEvents);
   if (path === "/new") return requireCode("admin", renderWizard);
   if (path === "/sample") return renderSample();
@@ -340,6 +341,10 @@ function renderHome() {
         <a class="card judge disabled" id="judgeCard" aria-disabled="true">
           <div class="ci">🔒</div><h3>I'm a Judge</h3>
           <p id="judgeSub">Judging hasn't started yet.</p>
+        </a>
+        <a class="card runevent" href="#/run">
+          <div class="ci">🎬</div><h3>Start Current Event</h3>
+          <p>Open judging, print sheets &amp; capture photos.</p>
         </a>
         <a class="card results" href="#/results">
           <div class="ci">🏆</div><h3>Results</h3>
@@ -2107,7 +2112,7 @@ async function renderResults() {
   const c = el(`<div class="wrap results"></div>`);
   c.appendChild(el(`<div class="jbar"><a class="back" href="#/menu">←</a><div class="who">${esc(
     ev.name || "Results"
-  )}</div><a class="mini" href="#/runner?event=${encodeURIComponent(ev.id)}">Runner sheet</a><a class="mini" href="#/photos?event=${encodeURIComponent(ev.id)}">📷 Dish photos</a><a class="mini" href="#/instructions?event=${encodeURIComponent(ev.id)}">Participant instructions</a><button class="mini primary" id="pdf">⬇ Report (PDF)</button><button class="mini" id="xlsx">Excel</button><button class="mini" id="csv">CSV</button></div>`));
+  )}</div><button class="mini primary" id="pdf">⬇ Report (PDF)</button><button class="mini" id="xlsx">Excel</button><button class="mini" id="csv">CSV</button></div>`));
   const aw = eventAwards(ev);
   const pcTab = aw.peoples.enabled
     ? `<button class="tab" data-tab="peoples">People's Choice</button>`
@@ -2870,6 +2875,71 @@ async function renderJudgesDB() {
 }
 
 // ---------- RUNNER SHEET (organizer key: code -> joint -> pickup) ----------
+// ---------- RUN EVENT (event-day console) ----------
+// One place for the day of: start/stop judging, the judge-join QRs, and links
+// to every printable/operational tool (runner sheet, dish photos, participant
+// instructions, judge cards). Results live on their own page.
+async function renderRunEvent() {
+  const myToken = renderToken;
+  const eventId = LS.activeEvent();
+  app().replaceChildren(el(`<div class="wrap"><a class="back" href="#/menu">← home</a><h2>Run event</h2><p class="sub">Loading “${esc(eventId)}”…</p></div>`));
+  const ev = await loadEvent(eventId);
+  if (isStale(myToken)) return;
+  if (!ev) {
+    app().replaceChildren(el(`<div class="wrap"><a class="back" href="#/menu">← home</a><p class="empty">No event found. Pick one in Event Admin → My events.</p></div>`));
+    return;
+  }
+  app().replaceChildren(buildRunEventView(ev, eventId));
+}
+
+function buildRunEventView(ev, eventId) {
+  const base = location.origin + location.pathname;
+  const enc = encodeURIComponent(ev.id);
+  const open = ev.judgingOpen === true;
+  const tools = [
+    { icon: "🏃", title: "Runner sheet", desc: "Pickup schedule for the runners.", href: `#/runner?event=${enc}` },
+    { icon: "📷", title: "Dish photos", desc: "Snap a photo of each dish as it comes in.", href: `#/photos?event=${enc}` },
+    { icon: "📋", title: "Participant instructions", desc: "One printable sheet per participant.", href: `#/instructions?event=${enc}` },
+    { icon: "⭐", title: "Judge cards", desc: "Each judge's join QR + scoring rubric.", href: `#/judgecard?event=${enc}` },
+  ];
+  const c = el(`<div class="wrap runevent">
+    <a class="back" href="#/menu">← home</a>
+    <h2>Run event</h2>
+    <p class="sub">${esc(ev.name || "")}${ev.eventDate ? " · " + esc(fmtDay(ev.eventDate)) : ""}</p>
+    <div class="runjudge ${open ? "live" : ""}">
+      <div class="rj-l"><div class="ci">${open ? "🟢" : "▶️"}</div>
+        <div><h3>${open ? "Judging is OPEN" : "Start judging"}</h3>
+        <p>${open ? "Judges can score now. Stop it when the event is done." : "Opens the ballots so judges can score at their table."}</p></div>
+      </div>
+      <button class="rj-btn ${open ? "live" : ""}" id="reToggle">${open ? "■ Stop judging" : "▶ Start judging"}</button>
+    </div>
+    <div class="runqrs" id="runQrs"></div>
+    <div class="runtools">${tools
+      .map((t) => `<a class="runtool" href="${t.href}"><div class="ci">${t.icon}</div><div class="rt-t"><h4>${esc(t.title)}</h4><p>${esc(t.desc)}</p></div><span class="rt-go">→</span></a>`)
+      .join("")}</div>
+    <a class="mini reslink" href="#/results?event=${enc}">See results →</a>
+  </div>`);
+
+  const qrs = $("#runQrs", c);
+  usedTables(ev).forEach((tbl) => {
+    const url = `${base}#/judge?event=${enc}&table=${tbl}`;
+    const card = el(`<div class="linkcard"><h4>Judge join — Table ${esc(tbl)}</h4><div class="qr" id="rq${esc(tbl)}"></div><input readonly value="${esc(url)}" onclick="this.select()"></div>`);
+    qrs.appendChild(card);
+    makeQR($("#rq" + tbl, card), url);
+  });
+
+  const tg = $("#reToggle", c);
+  tg.onclick = async () => {
+    const next = !(ev.judgingOpen === true);
+    tg.disabled = true;
+    try { await setJudgingOpen(ev.id, next); ev.judgingOpen = next; toast(next ? "Judging is OPEN ✓ — judges can score" : "Judging closed"); }
+    catch (e) { alert("Couldn't update judging — check your connection."); }
+    tg.disabled = false;
+    app().replaceChildren(buildRunEventView(ev, eventId));
+  };
+  return c;
+}
+
 async function renderRunner() {
   const myToken = renderToken;
   const eventId = LS.activeEvent();
