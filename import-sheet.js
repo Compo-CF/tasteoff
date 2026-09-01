@@ -3,8 +3,8 @@
 // Uses SheetJS (window.XLSX), vendored locally.
 //
 // Expected tabs (case-insensitive; extra columns ignored):
-//   Event    : Event ID | Event Name | Start Time | Interval | Admin Passcode | Results Passcode
-//   Criteria : Criterion | Short | Weight % | Low | High
+//   Event    : Event ID | Event Name | Start Time | Interval | Admin Passcode | Results Passcode | Event Type
+//   Criteria : Criterion | Short | Weight % | Low | High   (optional — if blank, the Event Type's preset is used)
 //   Judges   : Judge | Table
 //   Teams    : Code | Team | Table | Dish # | Serve Time | Dish Description
 
@@ -168,6 +168,9 @@ export function workbookToEvent(wb) {
     schedule: { startTime, intervalMin },
     adminPasscode: String(pick(e, "admin passcode", "admin")).trim(),
     resultsPasscode: String(pick(e, "results passcode", "results")).trim(),
+    // Optional: when the Criteria tab is blank, the import flow fills criteria
+    // from the matching saved/built-in Event Type preset.
+    eventType: String(pick(e, "event type", "type", "template")).trim(),
   };
 }
 

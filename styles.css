@@ -678,3 +678,16 @@ input, select {
 .ph-acts .ph-addlbl { cursor: pointer; text-align: center; flex: 1; }
 .ph-count { font-size: 13px; color: var(--muted); font-weight: 600; margin-left: auto; }
 .ph-dish { font-size: 12.5px; color: var(--muted); line-height: 1.3; margin-top: -2px; }
+
+/* ---------- ROSTER PICKER / PARTICIPANT MERGE / WRAP-UP ---------- */
+.phead-acts { display: flex; gap: 8px; align-items: center; }
+.jpick { max-width: 190px; }
+.ptools { margin: 12px 0 6px; }
+#mgFrom, #mgTo { width: 100%; }
+#mgFrom { min-height: 150px; }
+.mghint { margin: 8px 0 2px; color: var(--muted); font-size: 13px; }
+.wuact { margin-left: auto; display: flex; align-items: center; }
+.wrapup .ckrow { align-items: center; }
+.ckrow.ready, .ckmark.ready { }
+.ckmark.ready { background: var(--brand); color: #fff; }
+.ckrow.ready { border-color: var(--line); }

@@ -7,6 +7,7 @@ import {
   listEvents,
   deleteEvent,
   watchScores,
+  getEventScoresOnce,
   submitScore,
   watchPeoples,
   savePeoplesCount,
@@ -175,7 +176,7 @@ function robustnessLabel(wr, jname) {
 // Shared sub-navigation tabs for the Event Admin and Analytics hubs.
 function hubTabs(kind, active) {
   const tabs = kind === "admin"
-    ? [["events", "My events", "#/events"], ["admin", "Set up event", "#/admin"], ["checklist", "Checklist", "#/checklist"]]
+    ? [["events", "My events", "#/events"], ["admin", "Set up event", "#/admin"], ["checklist", "Checklist", "#/checklist"], ["wrapup", "Wrap-up", "#/wrapup"]]
     : [["judges", "Judge Analytics", "#/judges"], ["events", "Event Analytics", "#/history"], ["participants", "Participant Analytics", "#/participants"]];
   return el(`<div class="hubtabs">${tabs.map(([k, l, h]) => `<a class="hubtab${k === active ? " on" : ""}" href="${h}">${esc(l)}</a>`).join("")}</div>`);
 }
@@ -249,6 +250,7 @@ async function render() {
   if (path === "/instructions") return renderInstructions();
   if (path === "/judgecard") return renderJudgeCard();
   if (path === "/checklist") return requireCode("admin", renderChecklist);
+  if (path === "/wrapup") return requireCode("admin", renderWrapup);
   if (path === "/events") return requireCode("admin", renderEvents);
   if (path === "/new") return requireCode("admin", renderWizard);
   if (path === "/sample") return renderSample();
@@ -523,6 +525,164 @@ function buildChecklistView(ev, eventId) {
     </a>`);
     box.appendChild(row);
   });
+  return c;
+}
+
+// ---------- POST-EVENT WRAP-UP ----------
+// A guided close-out for a finished event: close judging, confirm ballots,
+// see the winner, download the client report, export data, mark it Done.
+async function renderWrapup() {
+  const myToken = renderToken;
+  const eventId = LS.activeEvent();
+  app().replaceChildren(
+    el(`<div class="wrap"><a class="back" href="#/menu">← home</a><h2>Wrap-up</h2><p class="sub">Loading “${esc(eventId)}”…</p></div>`)
+  );
+  const ev = await loadEvent(eventId);
+  if (isStale(myToken)) return;
+  const scores = await getEventScoresOnce(eventId).catch(() => []);
+  if (isStale(myToken)) return;
+  const aw = eventAwards(ev || {});
+  let peoples = {};
+  if (aw.peoples.enabled) {
+    peoples = await new Promise((res) => {
+      let done = false;
+      const un = watchPeoples(eventId, (c) => { if (done) return; done = true; try { un && un(); } catch (e) {} res(c || {}); });
+      setTimeout(() => { if (!done) { done = true; try { un && un(); } catch (e) {} res({}); } }, 2500);
+    });
+  }
+  if (isStale(myToken)) return;
+  app().replaceChildren(buildWrapupView(ev, eventId, scores, peoples, aw));
+}
+
+function buildWrapupView(ev, eventId, scores, peoples, aw) {
+  const teams = (ev && ev.teams) || [];
+  const judges = (ev && ev.judges) || [];
+  const hasScores = scores && scores.length > 0;
+  // Expected ballots = each judge scores every dish at their own table.
+  const jByTable = (t) => judges.filter((j) => (j.table || "A") === t).length;
+  const expected = teams.reduce((a, t) => a + jByTable(t.table || "A"), 0);
+  const got = scores.length;
+  const ballotsOk = expected > 0 && got >= expected;
+  // Winner by the official method.
+  let winnerName = "";
+  if (hasScores) {
+    const { scaled, minmax } = computeLeaderboards(ev.criteria || [], teams, scores);
+    const rows = ev.officialMethod === "minmax" ? minmax : scaled;
+    winnerName = (rows[0] && rows[0].name) || "";
+  }
+  const pcVotes = Object.values(peoples || {}).reduce((a, n) => a + (+n || 0), 0);
+  const status = eventStatus(ev);
+  const judgingOpen = ev && ev.judgingOpen === true;
+
+  const steps = [
+    {
+      key: "close",
+      title: "Close judging",
+      status: !ev ? "todo" : judgingOpen ? "warn" : "ok",
+      detail: judgingOpen ? "Judging is still OPEN — close it so no more scores come in." : "Judging is closed.",
+      action: judgingOpen ? { label: "Close judging", id: "wuClose" } : null,
+    },
+    {
+      key: "ballots",
+      title: "All ballots in",
+      status: !expected ? "todo" : ballotsOk ? "ok" : "warn",
+      detail: !expected
+        ? "Add judges and teams first."
+        : `${got} of ${expected} score sheets submitted` + (ballotsOk ? "" : ` · ${expected - got} missing`),
+    },
+    {
+      key: "winner",
+      title: "Winner determined",
+      status: hasScores ? "ok" : "todo",
+      detail: hasScores
+        ? `🏆 ${esc(winnerName)} — by ${ev.officialMethod === "minmax" ? "Min-Max" : "Scaled"}`
+        : "No scores yet — nothing to rank.",
+    },
+  ];
+  if (aw.peoples.enabled) {
+    steps.push({
+      key: "peoples",
+      title: "People's Choice tallied",
+      status: pcVotes > 0 ? "ok" : "todo",
+      detail: pcVotes > 0 ? `${pcVotes} ${esc(aw.peoples.unit || "votes")} counted` : "Enter the crowd tally on the People's Choice tab.",
+      action: { label: "Open tally", href: `#/results?event=${encodeURIComponent(eventId)}` },
+    });
+  }
+  steps.push(
+    {
+      key: "report",
+      title: "Client report (PDF)",
+      status: hasScores ? "ready" : "todo",
+      detail: hasScores ? "Generate the branded results & analytics PDF to send out." : "Available once scores are in.",
+      action: hasScores ? { label: "⬇ Download report", id: "wuPdf" } : null,
+    },
+    {
+      key: "data",
+      title: "Export raw data",
+      status: hasScores ? "ready" : "todo",
+      detail: "Excel (multi-sheet) and CSV live on the results screen.",
+      action: { label: "Open results", href: `#/results?event=${encodeURIComponent(eventId)}` },
+    },
+    {
+      key: "done",
+      title: "Mark event complete",
+      status: status === "done" ? "ok" : "todo",
+      detail: status === "done" ? "This event is marked Done." : "Flip the event to Done so it files under Completed.",
+      action: status === "done" ? null : { label: "Mark complete", id: "wuDone" },
+    }
+  );
+
+  const doneN = steps.filter((s) => s.status === "ok").length;
+  const total = steps.length;
+
+  const c = el(`<div class="wrap checklist wrapup">
+    <a class="back" href="#/menu">← home</a>
+    <h2>Wrap-up</h2>
+    <p class="sub">Close out ${ev && ev.name ? `<b>${esc(ev.name)}</b>` : "the event"} — everything to finish and hand off.</p>
+    <div class="cksum ${doneN === total ? "ready" : "notready"}">
+      <span class="ckbadge">${doneN}/${total}</span>
+      <span>${doneN === total ? "All wrapped up." : "steps done"}</span>
+    </div>
+    <div class="ckitems"></div>
+    <p class="foot">Tip: download the PDF report and the Excel export before you archive the event.</p>
+  </div>`);
+  c.querySelector(".back").after(hubTabs("admin", "wrapup"));
+  const box = $(".ckitems", c);
+  const icon = { ok: "✓", warn: "!", todo: "○", ready: "→" };
+  steps.forEach((it) => {
+    const row = el(`<div class="ckrow ${it.status}">
+      <span class="ckmark ${it.status}">${icon[it.status]}</span>
+      <span class="cktext"><b>${esc(it.title)}</b><span class="ckdetail">${it.detail}</span></span>
+      <span class="wuact"></span>
+    </div>`);
+    const slot = $(".wuact", row);
+    if (it.action) {
+      if (it.action.href) {
+        slot.appendChild(el(`<a class="mini" href="${it.action.href}">${esc(it.action.label)} ›</a>`));
+      } else {
+        slot.appendChild(el(`<button class="mini primary" id="${it.action.id}">${esc(it.action.label)}</button>`));
+      }
+    }
+    box.appendChild(row);
+  });
+
+  const closeBtn = $("#wuClose", c);
+  if (closeBtn) closeBtn.onclick = async () => {
+    closeBtn.disabled = true; closeBtn.textContent = "Closing…";
+    try { await setJudgingOpen(eventId, false); ev.judgingOpen = false; toast("Judging closed"); } catch (e) { alert("Couldn't close judging — check your connection."); }
+    renderWrapup();
+  };
+  const pdfBtn = $("#wuPdf", c);
+  if (pdfBtn) pdfBtn.onclick = async () => {
+    const ph = await loadPhotos(eventId).catch(() => ({}));
+    exportReportPDF(ev, scores, peoples, aw, ph);
+  };
+  const doneBtn = $("#wuDone", c);
+  if (doneBtn) doneBtn.onclick = async () => {
+    doneBtn.disabled = true; doneBtn.textContent = "Saving…";
+    try { ev.status = "done"; await saveEvent(ev); toast("Event marked complete"); } catch (e) { alert("Couldn't save — check your connection."); }
+    renderWrapup();
+  };
   return c;
 }
 
@@ -1023,6 +1183,15 @@ async function renderAdmin(preloaded) {
   c.appendChild(importSec);
 
   async function applyImported(imported) {
+    // If the sheet left Criteria blank but named an Event Type, inherit that
+    // preset's criteria (built-in or a saved type), matched by name or id.
+    if ((!imported.criteria || !imported.criteria.length) && imported.eventType) {
+      const saved = await listTemplates().catch(() => []);
+      const all = [...BUILTIN_TEMPLATES, ...(saved || [])];
+      const want = String(imported.eventType).trim().toLowerCase();
+      const t = all.find((x) => String(x.name).trim().toLowerCase() === want || String(x.id).trim().toLowerCase() === want);
+      if (t) imported.criteria = templateCriteria(t, uid);
+    }
     // Link the sheet's judges to existing roster judges; confirm any new ones.
     const rr = roster.length ? roster : await listRoster();
     const rec = await linkJudges(imported.judges, rr);
@@ -1306,7 +1475,7 @@ async function renderAdmin(preloaded) {
   drawCrit();
 
   // --- judges ---
-  const jSec = el(`<section class="panel"><div class="phead"><h3>Judges</h3><button class="mini" id="addJ">+ add</button></div><div id="jList"></div></section>`);
+  const jSec = el(`<section class="panel"><div class="phead"><h3>Judges</h3><div class="phead-acts"><select class="mini jpick" id="jRoster"><option value="">Add from roster…</option></select><button class="mini" id="addJ">+ add</button></div></div><div id="jList"></div></section>`);
   c.appendChild(jSec);
   const jList = $("#jList", jSec);
   function drawJudges() {
@@ -1328,6 +1497,7 @@ async function renderAdmin(preloaded) {
       };
       jList.appendChild(row);
     });
+    if (typeof fillRosterPicker === "function") fillRosterPicker();
   }
   // Sync any unsaved name/table edits back into ev.judges (keeps ids), no filtering.
   function syncJudgesFromDOM() {
@@ -1382,6 +1552,32 @@ async function renderAdmin(preloaded) {
   $("#addJ", jSec).onclick = () => {
     readJudges();
     ev.judges.push({ id: uid("j"), name: "", table: "A" });
+    drawJudges();
+  };
+  // Pick an existing roster judge instead of retyping. Roster loads async;
+  // fillRosterPicker() runs on load and after every judges redraw so already-
+  // added judges drop out of the list.
+  const jRoster = $("#jRoster", jSec);
+  let rosterList = roster && roster.length ? roster : [];
+  function fillRosterPicker() {
+    if (!jRoster) return;
+    const have = new Set(ev.judges.map((j) => judgeKey(j.name)).concat(ev.judges.map((j) => j.id)));
+    const opts = (rosterList || [])
+      .filter((r) => r.name && !have.has(r.id) && !have.has(judgeKey(r.name)))
+      .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+      .map((r) => `<option value="${esc(r.id)}">${esc(r.name)}</option>`)
+      .join("");
+    jRoster.innerHTML = `<option value="">Add from roster…</option>` + opts;
+  }
+  listRoster().then((r) => { rosterList = r || []; fillRosterPicker(); });
+  jRoster.onchange = () => {
+    const id = jRoster.value;
+    jRoster.value = "";
+    if (!id) return;
+    const r = (rosterList || []).find((x) => x.id === id);
+    if (!r) return;
+    readJudges();
+    ev.judges.push({ id: r.id, name: r.name, table: "A" });
     drawJudges();
   };
   drawJudges();
@@ -3022,6 +3218,7 @@ async function renderHistory(mode) {
           </div>
           <div id="h2hResult"></div>
         </div>
+        <div class="ptools"><button class="mini" id="mergeParts">🔗 Merge duplicate participants</button></div>
         <div class="board"><table>
           <thead><tr><th>#</th><th>Participant</th><th data-k="appearances">Events</th><th data-k="wins">Wins</th><th data-k="podiums">Top 3</th><th data-k="bestPlace">Best</th><th data-k="avgPlace">Avg place</th><th data-k="avgScore">Avg (1–5)</th></tr></thead>
           <tbody>${rows}</tbody></table></div>
@@ -3049,8 +3246,68 @@ async function renderHistory(mode) {
       node.querySelectorAll(".clickrow").forEach((tr) => {
         tr.onclick = () => showParticipant(tr.dataset.name);
       });
+      const mp = $("#mergeParts", node);
+      if (mp) mp.onclick = openMergeModal;
       host.replaceChildren(node);
     }
+  }
+
+  // Merge spelling variants of one participant into a single canonical name,
+  // rewriting team.name across every event so their history aggregates as one.
+  function openMergeModal() {
+    const allNames = [...new Set(events.flatMap((e) => (e.teams || []).map((t) => String(t.name || "").trim()).filter(Boolean)))].sort((a, b) => a.localeCompare(b));
+    const ov = el(`<div class="modal-ov"><div class="modal">
+      <div class="dd-head"><h3>Merge duplicate participants</h3><button class="mini" id="mgClose">close</button></div>
+      <p class="hint">Combine spelling variants of the same participant (e.g. "Goode Co" &amp; "Goode Company BBQ") so their track record aggregates as one. This renames the participant across every event — it doesn't touch scores.</p>
+      <label>Keep this name (canonical)
+        <select id="mgTo">${allNames.map((n) => `<option>${esc(n)}</option>`).join("")}</select></label>
+      <label>Merge these into it (Ctrl/Cmd-click for several)
+        <select id="mgFrom" multiple size="8">${allNames.map((n) => `<option>${esc(n)}</option>`).join("")}</select></label>
+      <div id="mgPreview" class="mghint"></div>
+      <div class="dd-acts"><button class="mini primary" id="mgGo">Merge</button><button class="mini" id="mgCancel">Cancel</button></div>
+    </div></div>`);
+    const close = () => ov.remove();
+    $("#mgClose", ov).onclick = close;
+    $("#mgCancel", ov).onclick = close;
+    ov.onclick = (e) => { if (e.target === ov) close(); };
+    const selFrom = () => [...$("#mgFrom", ov).selectedOptions].map((o) => o.value).filter((n) => n && n !== $("#mgTo", ov).value);
+    const countMatches = (froms) => {
+      const set = new Set(froms.map((f) => f.toLowerCase()));
+      let n = 0, evs = 0;
+      events.forEach((e) => { const hit = (e.teams || []).filter((t) => set.has(String(t.name || "").trim().toLowerCase())).length; if (hit) { n += hit; evs++; } });
+      return { n, evs };
+    };
+    const refresh = () => {
+      const froms = selFrom();
+      const { n, evs } = countMatches(froms);
+      $("#mgPreview", ov).textContent = froms.length
+        ? `${n} entr${n === 1 ? "y" : "ies"} across ${evs} event(s) → “${$("#mgTo", ov).value}”.`
+        : "Pick one or more names to merge in.";
+    };
+    $("#mgFrom", ov).onchange = refresh;
+    $("#mgTo", ov).onchange = refresh;
+    refresh();
+    $("#mgGo", ov).onclick = async () => {
+      const to = $("#mgTo", ov).value;
+      const froms = selFrom();
+      if (!froms.length) { alert("Pick at least one name to merge into the canonical one."); return; }
+      const set = new Set(froms.map((f) => f.toLowerCase()));
+      const touched = [];
+      let changed = 0;
+      events.forEach((e) => {
+        let dirty = false;
+        (e.teams || []).forEach((t) => { if (set.has(String(t.name || "").trim().toLowerCase())) { t.name = to; dirty = true; changed++; } });
+        if (dirty) touched.push(e);
+      });
+      if (!changed) { alert("No matching entries found."); return; }
+      const btn = $("#mgGo", ov); btn.disabled = true; btn.textContent = "Merging…";
+      let saved = 0;
+      for (const e of touched) { try { await saveEvent(e); saved++; } catch (err) {} }
+      close();
+      toast(`Merged ${changed} entr${changed === 1 ? "y" : "ies"} into “${to}” across ${saved} event(s)`);
+      draw();
+    };
+    document.body.appendChild(ov);
   }
 
   function showWinner(eventId) {
