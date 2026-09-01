@@ -573,21 +573,31 @@ function buildWrapupView(ev, eventId, scores, peoples, aw) {
   const pcVotes = Object.values(peoples || {}).reduce((a, n) => a + (+n || 0), 0);
   const status = eventStatus(ev);
   const judgingOpen = ev && ev.judgingOpen === true;
+  // The event hasn't run yet: judging never opened and no scores exist. The
+  // wrap-up is a post-event flow, so present it as "not ready" rather than
+  // marking un-started steps as done.
+  const notStarted = !!ev && !judgingOpen && !hasScores;
 
   const steps = [
     {
       key: "close",
       title: "Close judging",
-      status: !ev ? "todo" : judgingOpen ? "warn" : "ok",
-      detail: judgingOpen ? "Judging is still OPEN — close it so no more scores come in." : "Judging is closed.",
+      status: !ev ? "todo" : judgingOpen ? "warn" : hasScores ? "ok" : "todo",
+      detail: judgingOpen
+        ? "Judging is still OPEN — close it so no more scores come in."
+        : hasScores
+        ? "Judging is closed."
+        : "Judging hasn't opened yet — start it from Set up event when the event begins.",
       action: judgingOpen ? { label: "Close judging", id: "wuClose" } : null,
     },
     {
       key: "ballots",
       title: "All ballots in",
-      status: !expected ? "todo" : ballotsOk ? "ok" : "warn",
+      status: !expected || !got ? "todo" : ballotsOk ? "ok" : "warn",
       detail: !expected
         ? "Add judges and teams first."
+        : !got
+        ? "No score sheets submitted yet."
         : `${got} of ${expected} score sheets submitted` + (ballotsOk ? "" : ` · ${expected - got} missing`),
     },
     {
@@ -620,8 +630,8 @@ function buildWrapupView(ev, eventId, scores, peoples, aw) {
       key: "data",
       title: "Export raw data",
       status: hasScores ? "ready" : "todo",
-      detail: "Excel (multi-sheet) and CSV live on the results screen.",
-      action: { label: "Open results", href: `#/results?event=${encodeURIComponent(eventId)}` },
+      detail: hasScores ? "Excel (multi-sheet) and CSV live on the results screen." : "Available once scores are in.",
+      action: hasScores ? { label: "Open results", href: `#/results?event=${encodeURIComponent(eventId)}` } : null,
     },
     {
       key: "done",
@@ -635,14 +645,20 @@ function buildWrapupView(ev, eventId, scores, peoples, aw) {
   const doneN = steps.filter((s) => s.status === "ok").length;
   const total = steps.length;
 
+  const summary = notStarted
+    ? `<div class="cksum notready">
+        <span class="ckbadge">⏳</span>
+        <span>Hasn't been judged yet — the wrap-up steps unlock once the event runs.</span>
+      </div>`
+    : `<div class="cksum ${doneN === total ? "ready" : "notready"}">
+        <span class="ckbadge">${doneN}/${total}</span>
+        <span>${doneN === total ? "All wrapped up." : "steps done"}</span>
+      </div>`;
   const c = el(`<div class="wrap checklist wrapup">
     <a class="back" href="#/menu">← home</a>
     <h2>Wrap-up</h2>
     <p class="sub">Close out ${ev && ev.name ? `<b>${esc(ev.name)}</b>` : "the event"} — everything to finish and hand off.</p>
-    <div class="cksum ${doneN === total ? "ready" : "notready"}">
-      <span class="ckbadge">${doneN}/${total}</span>
-      <span>${doneN === total ? "All wrapped up." : "steps done"}</span>
-    </div>
+    ${summary}
     <div class="ckitems"></div>
     <p class="foot">Tip: download the PDF report and the Excel export before you archive the event.</p>
   </div>`);
