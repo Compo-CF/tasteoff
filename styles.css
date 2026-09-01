@@ -711,3 +711,5 @@ input, select {
 .runtool p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
 .runtool .rt-go { color: var(--brand); font-weight: 700; font-size: 18px; }
 .reslink { display: inline-block; }
+
+.runlinks { display: flex; gap: 12px; flex-wrap: wrap; }

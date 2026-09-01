@@ -2917,7 +2917,7 @@ function buildRunEventView(ev, eventId) {
     <div class="runtools">${tools
       .map((t) => `<a class="runtool" href="${t.href}"><div class="ci">${t.icon}</div><div class="rt-t"><h4>${esc(t.title)}</h4><p>${esc(t.desc)}</p></div><span class="rt-go">→</span></a>`)
       .join("")}</div>
-    <a class="mini reslink" href="#/results?event=${enc}">See results →</a>
+    <div class="runlinks"><a class="mini reslink" href="#/results?event=${enc}">See results →</a><a class="mini reslink" href="#/wrapup?event=${enc}">Wrap-up →</a></div>
   </div>`);
 
   const qrs = $("#runQrs", c);
