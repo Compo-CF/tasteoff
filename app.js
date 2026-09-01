@@ -2949,7 +2949,9 @@ async function renderRunner() {
     app().replaceChildren(el(`<div class="wrap"><a class="back" href="#/menu">← home</a><p class="empty">No event found.</p></div>`));
     return;
   }
-  if (ev.resultsPasscode && !resultsUnlocked) {
+  // Reachable from the admin-gated Run Event console, so an admin-unlocked
+  // session doesn't need to re-enter the results passcode here.
+  if (ev.resultsPasscode && !resultsUnlocked && !adminUnlocked) {
     return gate("Results passcode", (val) => {
       if (val === ev.resultsPasscode) { resultsUnlocked = true; renderRunner(); } else alert("Wrong passcode.");
     });
@@ -2992,7 +2994,9 @@ async function renderPhotos() {
     app().replaceChildren(el(`<div class="wrap"><a class="back" href="#/menu">← home</a><p class="empty">No event found.</p></div>`));
     return;
   }
-  if (ev.resultsPasscode && !resultsUnlocked) {
+  // Reachable from the admin-gated Run Event console, so an admin-unlocked
+  // session doesn't need to re-enter the results passcode here.
+  if (ev.resultsPasscode && !resultsUnlocked && !adminUnlocked) {
     return gate("Results passcode", (val) => {
       if (val === ev.resultsPasscode) { resultsUnlocked = true; renderPhotos(); } else alert("Wrong passcode.");
     });
