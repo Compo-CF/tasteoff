@@ -2970,7 +2970,7 @@ async function renderRunner() {
     )
     .join("");
   const c = el(`<div class="wrap runner">
-    <div class="jbar noprint"><a class="back" href="#/menu">←</a><div class="who">${esc(ev.name || "Runner sheet")}</div>
+    <div class="jbar noprint"><a class="back" href="#/run">←</a><div class="who">${esc(ev.name || "Runner sheet")}</div>
       <button class="mini" id="print">Print</button></div>
     <h2 class="runner-h">Runner sheet — pickup schedule</h2>
     <p class="runner-when">${esc(ev.name || "")}${ev.eventDate ? " · " + esc(fmtDay(ev.eventDate)) : ""} · pick up each dish at its time and deliver it to the judging table under a blind code.</p>
@@ -3004,7 +3004,7 @@ async function renderPhotos() {
   let photos = {};
 
   const c = el(`<div class="wrap photos">
-    <div class="jbar"><a class="back" href="#/menu">←</a><div class="who">${esc(ev.name || "Dish photos")}</div>
+    <div class="jbar"><a class="back" href="#/run">←</a><div class="who">${esc(ev.name || "Dish photos")}</div>
       <span class="ph-count" id="phCount"></span></div>
     <h2 class="runner-h">Dish photos</h2>
     <p class="sub">Snap or upload a photo for each dish as it comes in. Photos flow into the analytics dish view and the PDF report. Team names are shown here so you can match dishes — keep this screen away from judges.</p>
@@ -3116,7 +3116,7 @@ async function renderInstructions() {
     })
     .join("");
   const c = el(`<div class="wrap instructions">
-    <div class="jbar noprint"><a class="back" href="#/menu">←</a><div class="who">${esc(ev.name || "Participant instructions")}</div>
+    <div class="jbar noprint"><a class="back" href="#/run">←</a><div class="who">${esc(ev.name || "Participant instructions")}</div>
       <button class="mini" id="print">Print all</button></div>
     <p class="sub noprint">One instruction sheet per participant — print and hand out. Each shows their dish, entry time, portion count (judges + 1) and the blind-judging rules.</p>
     ${teams.length ? cards : `<p class="empty">No participants yet — add teams in Set up event.</p>`}
@@ -3174,7 +3174,7 @@ async function renderJudgeCard() {
         : `<p class="empty">Add judges and criteria in Set up event first — each judge gets a card with the rubric.</p>`)
     : "";
   const c = el(`<div class="wrap judgecard">
-    <div class="jbar noprint"><a class="back" href="#/menu">←</a><div class="who">${esc(ev.name || "Judge cards")}</div>
+    <div class="jbar noprint"><a class="back" href="#/run">←</a><div class="who">${esc(ev.name || "Judge cards")}</div>
       <button class="mini" id="print">Print all</button></div>
     <p class="sub noprint">One card per judge — print and hand each judge theirs. Scanning the code opens their ballot already set to their name${multiTable ? " and table" : ""}; the scoring rubric is printed on the card.</p>
     ${judges.length ? cards : empty}
