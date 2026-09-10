@@ -713,3 +713,6 @@ input, select {
 .reslink { display: inline-block; }
 
 .runlinks { display: flex; gap: 12px; flex-wrap: wrap; }
+
+/* Teams & blind codes — box each entrant so they're easy to tell apart */
+.trow { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
