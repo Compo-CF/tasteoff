@@ -71,16 +71,15 @@ export function buildRunnerPdf(ev) {
     ? [{ h: dropoff ? "Deliver by" : "Pickup", w: 78 }, { h: "Dish #", w: 46 }, { h: "Pick up from", w: 190 }, { h: "To", w: 44 }, { h: "Dish", w: U - 358 }]
     : [{ h: dropoff ? "Deliver by" : "Pickup", w: 78 }, { h: "Dish #", w: 46 }, { h: "Pick up from", w: 210 }, { h: "Dish", w: U - 334 }];
 
-  let y = 56;
-  doc.setFont("helvetica", "bold"); doc.setFontSize(20); doc.setTextColor(...BRICK);
+  let y = 50;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(...BRICK);
   doc.text("Runner sheet — pickup schedule", M, y);
-  y += 6; doc.setDrawColor(...GOLD); doc.setLineWidth(2); doc.line(M, y, M + 210, y);
-  y += 20;
-  doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(...MUTE);
-  const sub = `${ev.name || ""}${ev.eventDate ? " · " + fmtDay(ev.eventDate) : ""}`;
-  doc.text(sub, M, y); y += 14;
-  doc.text(dropoff ? "Receive each dish at its time under a blind code." : "Pick up each dish at its time and deliver it to the judging table under a blind code.", M, y);
-  y += 22;
+  y += 5; doc.setDrawColor(...GOLD); doc.setLineWidth(2); doc.line(M, y, M + 170, y);
+  y += 15;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTE);
+  const sub = `${ev.name || ""}${ev.eventDate ? " · " + fmtDay(ev.eventDate) : ""} — ${dropoff ? "receive each dish at its time under a blind code." : "pick up each dish at its time; deliver to the judging table under a blind code."}`;
+  const subLines = doc.splitTextToSize(sub, U);
+  doc.text(subLines, M, y); y += subLines.length * 11 + 6;
 
   function header() {
     doc.setFillColor(245, 240, 236); doc.rect(M, y - 12, U, 22, "F");
@@ -92,28 +91,32 @@ export function buildRunnerPdf(ev) {
   header();
   doc.setFont("helvetica", "normal"); doc.setFontSize(10.5);
 
+  const DISH_MAX_LINES = 2;
   teams.forEach((t, i) => {
-    const dishStr = t.dishDescription || "";
     const dishCol = cols[cols.length - 1];
-    const dishLines = doc.splitTextToSize(dishStr, dishCol.w - 8);
-    const rowH = Math.max(20, dishLines.length * 12 + 6);
-    if (y + rowH > PH - 40) { doc.addPage(); y = 56; header(); doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); }
-    if (i % 2 === 0) { doc.setFillColor(250, 249, 247); doc.rect(M, y - 12, U, rowH, "F"); }
+    doc.setFontSize(8.5);
+    let dishLines = doc.splitTextToSize(t.dishDescription || "", dishCol.w - 8);
+    if (dishLines.length > DISH_MAX_LINES) {
+      dishLines = dishLines.slice(0, DISH_MAX_LINES);
+      dishLines[DISH_MAX_LINES - 1] = dishLines[DISH_MAX_LINES - 1].replace(/\s*\S{0,2}$/, "…");
+    }
+    const rowH = Math.max(17, dishLines.length * 10 + 6);
+    if (y + rowH > PH - 30) { doc.addPage(); y = 50; header(); }
+    if (i % 2 === 0) { doc.setFillColor(250, 249, 247); doc.rect(M, y - 11, U, rowH, "F"); }
     let x = M + 6;
     const cells = anyTable
       ? [fmt12(t.serveTime), String(t.dishNumber ?? ""), t.name || "", t.table || "—"]
       : [fmt12(t.serveTime), String(t.dishNumber ?? ""), t.name || ""];
-    doc.setTextColor(...INK);
+    doc.setFontSize(9); doc.setTextColor(...INK);
     cells.forEach((val, ci) => {
       doc.setFont("helvetica", ci === 0 ? "bold" : "normal");
-      const line = doc.splitTextToSize(String(val), cols[ci].w - 8);
-      doc.text(line, x, y + 2);
+      doc.text(doc.splitTextToSize(String(val), cols[ci].w - 8), x, y + 2);
       x += cols[ci].w;
     });
-    doc.setFont("helvetica", "normal"); doc.setTextColor(...MUTE);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(...MUTE);
     doc.text(dishLines, x, y + 2);
     y += rowH;
-    doc.setDrawColor(...LINE); doc.setLineWidth(0.5); doc.line(M, y - 10, M + U, y - 10);
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.5); doc.line(M, y - 9, M + U, y - 9);
   });
   return doc;
 }
