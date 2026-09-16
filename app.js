@@ -1871,6 +1871,12 @@ async function renderJudge(params) {
     app().replaceChildren(w);
     return;
   }
+  // Title the tab after the judge when a per-judge link is used, so a
+  // home-screen shortcut created from it is labeled with the judge's name.
+  const jHintTitle = params.get("judge");
+  const jForTitle = (ev.judges || []).find((j) => j.id === (jHintTitle || LS.judgeId));
+  if (jForTitle) document.title = `${jForTitle.name} · tasteoff`;
+
   // Judging must be explicitly opened by the organizer before judges can score.
   if (eventId !== "demo" && ev.judgingOpen !== true) {
     const w = el(`<div class="wrap"><a class="back" href="#/menu">← home</a>
