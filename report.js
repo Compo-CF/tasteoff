@@ -331,22 +331,65 @@ export async function buildReportDoc(ev, scores, peoples, aw, photos = {}) {
     center: [0, 2, 3, 4, 5, 6, 7], fs: 9, rowH: 19, boldCol: 4, badges: lbBadges,
   });
 
-  // ---------- PAGE: THE MENU (every dish description, in serving order) ----------
+  // ---------- PAGE: THE MENU (dish # / joint / menu item) ----------
   {
     y = newPage();
     y = h1("The menu", y);
     y = para("Every dish as entered by the restaurants, in serving order.", y, 9.6);
     const menuTeams = [...teams].sort((a, b) => (a.dishNumber || 0) - (b.dishNumber || 0));
-    menuTeams.forEach((t) => {
-      const title = `${t.dishNumber != null ? "#" + t.dishNumber + "   " : ""}${t.name || "#" + t.code}`;
-      setF("normal", 9.3);
-      const dl = doc.splitTextToSize(t.dishDescription || "—", U - 14);
-      const blockH = 15 + dl.length * 11 + 12;
-      if (y + blockH > PH - 52) y = newPage();
-      setF("bold", 10.6); setC(RPT.ink); T(title, M, y); y += 14;
-      setF("normal", 9.3); setC(RPT.muted); doc.text(dl, M + 12, y); y += dl.length * 11 + 8;
-      drawc(RPT.line); doc.setLineWidth(0.4); doc.line(M, y, M + U, y); y += 10;
+    const c1 = 46, c2 = 150, c3 = U - c1 - c2;
+    const menuHead = () => {
+      doc.setFillColor(245, 240, 236); doc.rect(M, y - 12, U, 20, "F");
+      setF("bold", 9); setC(RPT.ink);
+      T("DISH #", M + 6, y + 2); T("JOINT", M + c1 + 6, y + 2); T("MENU ITEM", M + c1 + c2 + 6, y + 2);
+      y += 16;
+    };
+    menuHead();
+    menuTeams.forEach((t, i) => {
+      setF("normal", 9);
+      const item = doc.splitTextToSize(t.dishDescription || "—", c3 - 8);
+      const joint = doc.splitTextToSize(t.name || "#" + t.code, c2 - 8);
+      const rowH = Math.max(18, Math.max(item.length, joint.length) * 11 + 6);
+      if (y + rowH > PH - 52) { y = newPage(); menuHead(); }
+      if (i % 2 === 0) { doc.setFillColor(250, 249, 247); doc.rect(M, y - 11, U, rowH, "F"); }
+      setF("bold", 9.5); setC(RPT.ink); T(String(t.dishNumber ?? ""), M + 6, y + 2);
+      setF("normal", 9.5); doc.text(joint, M + c1 + 6, y + 2);
+      setF("normal", 9); setC(RPT.muted); doc.text(item, M + c1 + c2 + 6, y + 2);
+      y += rowH;
+      drawc(RPT.line); doc.setLineWidth(0.4); doc.line(M, y - 9, M + U, y - 9);
     });
+  }
+
+  // ---------- PAGE: CATEGORY WINNERS ----------
+  {
+    y = newPage();
+    y = h1("Category winners", y);
+    y = para("The dish that scored highest on each criterion — the average of the judges' 1–5 marks. Handy for side awards.", y, 9.6);
+    const cwBody = critChamp.map((c) => [c.crit, c.name, (typeof c.v === "number" ? c.v.toFixed(2) : (c.v || "—"))]);
+    y = drawTable(y, [180, U - 180 - 74, 74], ["Criterion", "Top dish", "Avg (1–5)"], cwBody, { center: [2], fs: 10, rowH: 24, boldCol: 1 });
+  }
+
+  // ---------- PAGE: JUDGE SCORECARDS (judge × dish matrix, avg 1–5) ----------
+  {
+    y = newPage();
+    y = h1("Judge scorecards", y);
+    y = para("Each judge's average 1–5 mark for every dish they scored, in serving order. Blank means that judge didn't score that dish.", y, 9.6);
+    const markOf = {};
+    (scores || []).forEach((s) => {
+      const vals = Object.values(s.criterionScores || {}).filter((v) => typeof v === "number");
+      if (!vals.length) return;
+      (markOf[s.judgeId] = markOf[s.judgeId] || {})[s.teamCode] = vals.reduce((a, b) => a + b, 0) / vals.length;
+    });
+    const jFirst = judges.map((j) => (nameOf[j.id] || j.name || j.id).split(/\s+/)[0]);
+    const scTeams = [...teams].sort((a, b) => (a.dishNumber || 0) - (b.dishNumber || 0));
+    const nameW = 150, jw = (U - nameW) / Math.max(1, judges.length);
+    const widths = [nameW, ...judges.map(() => jw)];
+    const headers = ["Dish", ...jFirst];
+    const scBody = scTeams.map((t) => [
+      `${t.dishNumber != null ? t.dishNumber + ". " : ""}${t.name || "#" + t.code}`,
+      ...judges.map((j) => { const v = markOf[j.id] && markOf[j.id][t.code]; return typeof v === "number" ? v.toFixed(1) : "–"; }),
+    ]);
+    y = drawTable(y, widths, headers, scBody, { center: judges.map((_, i) => i + 1), fs: 8.6, rowH: 18 });
   }
 
   // ---------- PAGE: PEOPLE'S CHOICE (only if enabled & has votes) ----------
