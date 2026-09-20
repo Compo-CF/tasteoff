@@ -3029,7 +3029,7 @@ async function renderPhotos() {
       ${t.dishDescription ? `<div class="ph-dish">${esc(t.dishDescription)}</div>` : ""}
       <div class="ph-imgwrap">${pic ? `<img class="ph-img" src="${pic}" alt="dish photo">` : `<div class="ph-empty">📷</div>`}</div>
       <div class="ph-acts">
-        <label class="mini primary ph-addlbl">${pic ? "Replace" : "Add photo"}<input type="file" accept="image/*" capture="environment" class="ph-in" hidden></label>
+        <label class="mini primary ph-addlbl">${pic ? "Replace" : "Add photo"}<input type="file" accept="image/*" class="ph-in" hidden></label>
         ${pic ? `<button class="mini ph-del">Remove</button>` : ""}
       </div>
     </div>`);
