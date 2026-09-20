@@ -149,6 +149,21 @@ function compressImage(file, maxDim = 1100, quality = 0.72) {
   });
 }
 
+// Trigger a device download of a File/Blob (or data URL) so a captured dish
+// photo is kept on the phone too, not only in Firestore. On Android/desktop it
+// downloads; on iOS it opens the image so the user can Save to Photos/Files.
+function saveBlobToDevice(fileOrUrl, filename) {
+  try {
+    let href, revoke;
+    if (typeof fileOrUrl === "string") { href = fileOrUrl; }
+    else { href = URL.createObjectURL(fileOrUrl); revoke = href; }
+    const a = document.createElement("a");
+    a.href = href; a.download = filename; a.rel = "noopener";
+    document.body.appendChild(a); a.click(); a.remove();
+    if (revoke) setTimeout(() => URL.revokeObjectURL(revoke), 5000);
+  } catch (e) {}
+}
+
 const ordinal = (n) => {
   const s = ["th", "st", "nd", "rd"], v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
@@ -2008,7 +2023,10 @@ async function renderJudge(params) {
       submitted[team.code] = { ...pending };
       status.textContent = "Saved ✓ (syncs automatically)";
       drawDishNav();
-      // auto-advance to next unscored dish
+      // All dishes scored → closing screen (handles skipping around, not just #14).
+      const allDone = myTeams.length > 0 && myTeams.every((t) => submitted[t.code]);
+      if (allDone) { setTimeout(showJudgeDone, 500); return; }
+      // otherwise auto-advance to next unscored dish
       const next = myTeams.findIndex((t, i) => i > currentIdx && !submitted[t.code]);
       if (next >= 0) {
         setTimeout(() => {
@@ -2043,6 +2061,21 @@ async function renderJudge(params) {
     card.appendChild(nvg);
 
     cardHost.replaceChildren(card);
+  }
+
+  // Closing screen once a judge has scored every dish assigned to their table.
+  function showJudgeDone() {
+    const n = myTeams.length;
+    const firstName = (judge.name || "").trim().split(/\s+/)[0];
+    const done = el(`<div class="judgedone">
+      <div class="jd-ico">🎉</div>
+      <h2>Thanks for judging${firstName ? ", " + esc(firstName) : ""}!</h2>
+      <p>You've scored all ${n} dish${n === 1 ? "" : "es"}. Your ballots are saved.</p>
+      <p class="sub">The organizer will tally the results. Tap a dish above if you want to review or change a score.</p>
+      <button class="primary" id="jdReview">Review my ballots</button>
+    </div>`);
+    done.querySelector("#jdReview").onclick = () => { currentIdx = 0; drawDishNav(); drawScoreCard(); };
+    cardHost.replaceChildren(done);
   }
 
   drawDishNav();
@@ -3042,6 +3075,10 @@ async function renderPhotos() {
         photos[code] = url;
         await savePhoto(eventId, code, url);
         redrawTile(t); updateCount();
+        // Also keep the original, full-quality photo on the device.
+        const ext = (f.name && f.name.includes(".")) ? f.name.split(".").pop() : ((f.type || "").split("/")[1] || "jpg");
+        const nm = `${(ev.name || "dish").replace(/[^\w &-]/g, "")} - ${String(t.dishNumber || "").padStart(2, "0")} ${(t.name || code).replace(/[^\w &-]/g, "")}`.trim();
+        saveBlobToDevice(f, nm + "." + ext);
       } catch (e) { lab.firstChild.textContent = t0; alert("Couldn't save that image."); }
     };
     const del = div.querySelector(".ph-del");

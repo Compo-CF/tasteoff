@@ -331,6 +331,24 @@ export async function buildReportDoc(ev, scores, peoples, aw, photos = {}) {
     center: [0, 2, 3, 4, 5, 6, 7], fs: 9, rowH: 19, boldCol: 4, badges: lbBadges,
   });
 
+  // ---------- PAGE: THE MENU (every dish description, in serving order) ----------
+  {
+    y = newPage();
+    y = h1("The menu", y);
+    y = para("Every dish as entered by the restaurants, in serving order.", y, 9.6);
+    const menuTeams = [...teams].sort((a, b) => (a.dishNumber || 0) - (b.dishNumber || 0));
+    menuTeams.forEach((t) => {
+      const title = `${t.dishNumber != null ? "#" + t.dishNumber + "   " : ""}${t.name || "#" + t.code}`;
+      setF("normal", 9.3);
+      const dl = doc.splitTextToSize(t.dishDescription || "—", U - 14);
+      const blockH = 15 + dl.length * 11 + 12;
+      if (y + blockH > PH - 52) y = newPage();
+      setF("bold", 10.6); setC(RPT.ink); T(title, M, y); y += 14;
+      setF("normal", 9.3); setC(RPT.muted); doc.text(dl, M + 12, y); y += dl.length * 11 + 8;
+      drawc(RPT.line); doc.setLineWidth(0.4); doc.line(M, y, M + U, y); y += 10;
+    });
+  }
+
   // ---------- PAGE: PEOPLE'S CHOICE (only if enabled & has votes) ----------
   if (pcOn) {
     y = newPage();
@@ -432,8 +450,9 @@ export async function buildReportDoc(ev, scores, peoples, aw, photos = {}) {
     y = newPage();
     y = h1("Dish photos", y);
     y = para("Snapshots captured during judging, in finish order.", y, 9.6);
-    const cols = 2, gap = 16, capH = 18, maxIh = 300;
+    const cols = 2, gap = 16, capH = 40, maxIh = 280;
     const cw = (U - gap) / cols;
+    const descOf = (code) => { const t = (teams || []).find((x) => String(x.code) === String(code)); return t ? (t.dishDescription || "") : ""; };
     // Fit each image to the column width at its own aspect ratio; cap the
     // height of very tall (portrait) shots and center them in the column.
     const box = (code) => {
@@ -454,6 +473,13 @@ export async function buildReportDoc(ev, scores, peoples, aw, photos = {}) {
         try { doc.addImage(photos[String(r.code)], "JPEG", ix, y, w, h); } catch (e) {}
         drawc(RPT.line); doc.setLineWidth(0.6); doc.rect(ix, y, w, h);
         setF("bold", 9.5); setC(RPT.ink); T(rclip(`${r.place ? r.place + ". " : ""}${r.name || "#" + r.code}`, 36), cx, y + rowH + 12);
+        const desc = descOf(r.code);
+        if (desc) {
+          setF("normal", 7.6); setC(RPT.muted);
+          let dl = doc.splitTextToSize(desc, cw);
+          if (dl.length > 2) { dl = dl.slice(0, 2); dl[1] = dl[1].replace(/\s*\S{0,2}$/, "…"); }
+          doc.text(dl, cx, y + rowH + 23);
+        }
       });
       y += rowH + capH + 8;
     }

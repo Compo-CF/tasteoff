@@ -716,3 +716,10 @@ input, select {
 
 /* Teams & blind codes — box each entrant so they're easy to tell apart */
 .trow { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+
+/* ---------- JUDGE DONE (closing screen) ---------- */
+.judgedone { text-align: center; padding: 40px 18px 28px; }
+.judgedone .jd-ico { font-size: 56px; line-height: 1; }
+.judgedone h2 { margin: 12px 0 6px; }
+.judgedone p { color: var(--muted); max-width: 440px; margin: 6px auto; }
+.judgedone .primary { margin-top: 18px; }
