@@ -420,19 +420,42 @@ export async function buildReportDoc(ev, scores, peoples, aw, photos = {}) {
   // ---------- PAGE: DISH PHOTOS (only if any exist) ----------
   const withPhotos = rows.filter((r) => photos && photos[String(r.code)]);
   if (withPhotos.length) {
+    // Preload each photo's natural size so we can keep its true aspect ratio
+    // (never squish into a fixed box).
+    const dims = {};
+    await Promise.all(withPhotos.map((r) => new Promise((res) => {
+      const im = new Image();
+      im.onload = () => { dims[r.code] = { w: im.naturalWidth || 4, h: im.naturalHeight || 3 }; res(); };
+      im.onerror = () => { dims[r.code] = { w: 4, h: 3 }; res(); };
+      im.src = photos[String(r.code)];
+    })));
     y = newPage();
     y = h1("Dish photos", y);
     y = para("Snapshots captured during judging, in finish order.", y, 9.6);
-    const cols = 2, gap = 16, cw = (U - gap) / cols, ih = cw * 0.72;
+    const cols = 2, gap = 16, capH = 18, maxIh = 300;
+    const cw = (U - gap) / cols;
+    // Fit each image to the column width at its own aspect ratio; cap the
+    // height of very tall (portrait) shots and center them in the column.
+    const box = (code) => {
+      const d = dims[code] || { w: 4, h: 3 };
+      let w = cw, h = cw * (d.h / d.w);
+      if (h > maxIh) { h = maxIh; w = maxIh * (d.w / d.h); }
+      return { w, h };
+    };
     for (let i = 0; i < withPhotos.length; i += cols) {
-      if (y + ih + 34 > PH - 52) y = newPage();
-      withPhotos.slice(i, i + cols).forEach((r, ci) => {
-        const x = M + ci * (cw + gap);
-        try { doc.addImage(photos[String(r.code)], "JPEG", x, y, cw, ih); } catch (e) {}
-        drawc(RPT.line); doc.setLineWidth(0.6); doc.rect(x, y, cw, ih);
-        setF("bold", 9.5); setC(RPT.ink); T(rclip(`${r.place ? r.place + ". " : ""}${r.name || "#" + r.code}`, 36), x, y + ih + 12);
+      const rowItems = withPhotos.slice(i, i + cols);
+      const boxes = rowItems.map((r) => box(r.code));
+      const rowH = Math.max(...boxes.map((b) => b.h));
+      if (y + rowH + capH + 8 > PH - 52) y = newPage();
+      rowItems.forEach((r, ci) => {
+        const cx = M + ci * (cw + gap);
+        const { w, h } = boxes[ci];
+        const ix = cx + (cw - w) / 2; // center within the column slot
+        try { doc.addImage(photos[String(r.code)], "JPEG", ix, y, w, h); } catch (e) {}
+        drawc(RPT.line); doc.setLineWidth(0.6); doc.rect(ix, y, w, h);
+        setF("bold", 9.5); setC(RPT.ink); T(rclip(`${r.place ? r.place + ". " : ""}${r.name || "#" + r.code}`, 36), cx, y + rowH + 12);
       });
-      y += ih + 26;
+      y += rowH + capH + 8;
     }
   }
 
