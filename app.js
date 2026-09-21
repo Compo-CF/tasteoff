@@ -716,7 +716,7 @@ function buildWrapupView(ev, eventId, scores, peoples, aw) {
   const doneBtn = $("#wuDone", c);
   if (doneBtn) doneBtn.onclick = async () => {
     doneBtn.disabled = true; doneBtn.textContent = "Saving…";
-    try { ev.status = "done"; await saveEvent(ev); toast("Event marked complete"); } catch (e) { alert("Couldn't save — check your connection."); }
+    try { ev.status = "done"; await saveEvent(eventId, ev); toast("Event marked complete"); } catch (e) { alert("Couldn't save — check your connection."); }
     renderWrapup();
   };
   return c;
@@ -3435,7 +3435,7 @@ async function renderHistory(mode) {
       if (!changed) { alert("No matching entries found."); return; }
       const btn = $("#mgGo", ov); btn.disabled = true; btn.textContent = "Merging…";
       let saved = 0;
-      for (const e of touched) { try { await saveEvent(e); saved++; } catch (err) {} }
+      for (const e of touched) { try { await saveEvent(e.id, e); saved++; } catch (err) {} }
       close();
       toast(`Merged ${changed} entr${changed === 1 ? "y" : "ies"} into “${to}” across ${saved} event(s)`);
       draw();
